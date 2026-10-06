@@ -22,19 +22,28 @@ export const PALETTE = {
   skyTop: '#5fb8ff',
   skyMid: '#b8e4ff',
   skyHorizon: '#ffe9c2',
-  hillBack: '#7fd36a',
-  hillFront: '#4fb44a',
   cloud: '#ffffff',
   checkerRed: '#ff5a4e',
 
+  facade: '#e8d9bd',
+  windowLit: '#ffe3a4',
+  windowDark: '#33415e',
+  metalTrim: '#c9d2da',
+  ground: '#cbb99a',
+
   paddle: '#ff5a4e',
   ball: '#fff6d8',
+  /** Ball flavours: plain cream, ember, brushed steel and dark bomb. */
+  ballTypes: { standard: '#fff6d8', fire: '#ff8c3a', heavy: '#c3cdd8', bomb: '#5a4a6a' },
   wall: '#fffaf0',
   wallAccent: '#ff5a4e',
   guide: '#ffffff',
 
   brickRows: ['#ff5a4e', '#ff9f2e', '#ffd23e', '#5fc94e', '#3f8cff', '#a06bff'],
-  brickSpecial: { tough: '#e0a05c', indestructible: '#9aa7b5', explosive: '#e83b4f' },
+  // Brick materials: painted wooden crates keep the per-row colours; tough bricks
+  // read as sheet metal, indestructible ones as cast concrete and explosives as
+  // hazard-striped crates.
+  brickSpecial: { tough: '#9db0c4', indestructible: '#bdb7aa', explosive: '#e8483b' },
   powerUp: {
     wide: '#3f8cff',
     multi: '#a06bff',
@@ -42,5 +51,6 @@ export const PALETTE = {
     fast: '#ff9f2e',
     laser: '#e83b4f',
     life: '#ff7ab8',
+    powerBall: '#2fd0b0',
   },
 } as const

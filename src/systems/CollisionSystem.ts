@@ -1,5 +1,7 @@
 import { BALL, EXPLOSION, FIELD } from '../config/gameConfig'
 import type { GameBus } from '../core/EventBus'
+import { ballBehaviors, type BallBehavior } from '../entities/ballBehavior'
+import type { BrickHitOutcome } from '../entities/BrickBehavior'
 import type { Brick, Ball } from '../entities/types'
 import { DEG2RAD, clamp, vecDistance } from '../utils/math'
 import { boxesOverlap, circleIntersectsBox, resolveCircleBox } from '../utils/collision'
@@ -13,6 +15,12 @@ const PICKUP_RADIUS = 1.2
 const LASER_HALF_WIDTH = 0.17
 const LASER_HALF_HEIGHT = 0.8
 const POWER_UP_OUT_MARGIN = 2
+
+/** Lethal balls bypass hit points: the brick dies (explosives still chain). */
+const forceDestroy = (brick: Brick): BrickHitOutcome => {
+  brick.hitsLeft = 0
+  return { destroyed: true, explodes: brick.type === 'explosive' }
+}
 
 /**
  * Resolves every contact in the simulation. Owns brick damage (Strategy) so
@@ -106,7 +114,7 @@ export class CollisionSystem {
         brick.halfHeight,
         ball.vel,
       )
-      this.damageBrick(world, brick, false)
+      this.damageBrick(world, brick, false, ballBehaviors[ball.type])
       return
     }
   }
@@ -114,11 +122,19 @@ export class CollisionSystem {
   /**
    * Applies the brick's hit Strategy; on destruction it scores, drops power-ups
    * and (for explosives) recursively detonates the neighbourhood. `alive` flips
-   * before recursion, which makes chain loops impossible.
+   * before recursion, which makes chain loops impossible. The passing ball's
+   * behaviour can force the kill (`lethal`) and/or start the sweep (`chains`);
+   * chain hops pass no ball, so a sweep never recurses with its own rules.
    */
-  private damageBrick(world: World, brick: Brick, chain: boolean): void {
+  private damageBrick(
+    world: World,
+    brick: Brick,
+    chain: boolean,
+    ball: BallBehavior | null = null,
+  ): void {
     if (!brick.alive) return
-    const outcome = brick.behavior.hit(brick)
+    const lethal = ball?.lethal === true && brick.type !== 'indestructible'
+    const outcome = lethal ? forceDestroy(brick) : brick.behavior.hit(brick)
 
     if (!outcome.destroyed) {
       this.bus.emit('brickDamaged', {
@@ -142,7 +158,7 @@ export class CollisionSystem {
     })
     this.powerUpSystem.maybeSpawn(world, brick.pos)
 
-    if (!outcome.explodes) return
+    if (!outcome.explodes && ball?.chains !== true) return
     for (const other of world.bricks) {
       if (!other.alive) continue
       if (vecDistance(other.pos, brick.pos) > EXPLOSION.radius) continue

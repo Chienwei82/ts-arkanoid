@@ -12,10 +12,15 @@ import {
 } from 'three'
 import { BALL, FIELD, PADDLE, POWER_UPS, RENDER } from '../config/gameConfig'
 import { PALETTE } from '../config/palette'
-import type { Ball, LaserBolt, PowerUp, PowerUpType } from '../entities/types'
+import type { Ball, BallType, LaserBolt, PowerUp, PowerUpType } from '../entities/types'
 import type { World } from '../systems/World'
 import { hexToInt, lerp } from '../utils/math'
-import { createInkMaterial, createOutlineMaterial, createPaperMaterial } from './materials'
+import {
+  createGlowMaterial,
+  createInkMaterial,
+  createOutlineMaterial,
+  createPaperMaterial,
+} from './materials'
 import type { CraftTextures } from './textures'
 
 const BALL_GLOW = 0.3
@@ -25,6 +30,18 @@ const LASER_SIZE = { width: 0.34, height: 1.7, depth: 0.3 }
 const CANNON_SIZE = { width: 0.7, height: 0.9, depth: PADDLE.depth }
 const LASER_COLOUR = hexToInt(PALETTE.powerUp.laser)
 const BALL_COLOUR = hexToInt(PALETTE.ball)
+/** Special ball flavours glow harder than the plain cream ball. */
+const BALL_SPECIAL_GLOW = 0.7
+const BALL_TYPE_COLOURS: Readonly<Record<BallType, number>> = {
+  standard: hexToInt(PALETTE.ballTypes.standard),
+  fire: hexToInt(PALETTE.ballTypes.fire),
+  heavy: hexToInt(PALETTE.ballTypes.heavy),
+  bomb: hexToInt(PALETTE.ballTypes.bomb),
+}
+/** Neutral sticker tint: the icon texture already carries its own colours. */
+const CUE_PLATE_TINT = 0xffffff
+/** Black emissive = "no glow" for the bare paddle. */
+const NO_EMISSIVE = 0x000000
 /** Slot marker for "no power-up assigned" in the card pool. */
 const NO_SLOT = -1
 
@@ -48,6 +65,8 @@ export class ActorRenderer {
   private readonly ballRoot = new Group()
   private readonly ballInk: Mesh[] = []
   private readonly ballBodies: Mesh[] = []
+  private readonly ballMaterials: MeshLambertMaterial[] = []
+  private readonly ballTypes: (BallType | null)[] = []
   private readonly ballLight: PointLight
 
   private readonly cardRoot = new Group()
@@ -62,6 +81,17 @@ export class ActorRenderer {
   private readonly guide: Mesh
   private readonly guideMaterial: MeshBasicMaterial
 
+  private readonly paddleBodyMaterial = new MeshLambertMaterial({
+    color: hexToInt(PALETTE.paddle),
+    flatShading: true,
+  })
+  private readonly cuePlateMaterial: MeshBasicMaterial
+  private readonly cueAuraMaterial: MeshBasicMaterial
+  private readonly cuePlate: Mesh
+  private readonly cueAura: Mesh
+  private cueType: PowerUpType | null = null
+  private motionScale = 1
+
   private readonly paddleLayerScales: { x: number; y: number }[] = []
   private pulseTimer = 0
   private paddlePulse = 0
@@ -73,6 +103,29 @@ export class ActorRenderer {
     this.paddleRoot.position.z = RENDER.depth.paddle
     this.root.add(this.paddleRoot)
     this.buildPaddle()
+    this.cuePlateMaterial = new MeshBasicMaterial({
+      transparent: true,
+      alphaTest: 0.15,
+      depthWrite: false,
+    })
+    const plateGeometry = new PlaneGeometry(RENDER.paddleCue.plateSize, RENDER.paddleCue.plateSize)
+    this.geometries.push(plateGeometry)
+    this.materials.push(this.cuePlateMaterial)
+    this.cuePlate = new Mesh(plateGeometry, this.cuePlateMaterial)
+    this.cuePlate.position.z =
+      RENDER.paddleLayers.body.z + PADDLE.depth / 2 + RENDER.paddleCue.plateInset
+    this.cuePlate.visible = false
+    this.paddleRoot.add(this.cuePlate)
+
+    this.cueAuraMaterial = createGlowMaterial(this.textures.glow)
+    this.cueAuraMaterial.opacity = RENDER.paddleCue.aura.alpha
+    const auraGeometry = new PlaneGeometry(1, 1)
+    this.geometries.push(auraGeometry)
+    this.materials.push(this.cueAuraMaterial)
+    this.cueAura = new Mesh(auraGeometry, this.cueAuraMaterial)
+    this.cueAura.position.z = RENDER.paddleCue.aura.z
+    this.cueAura.visible = false
+    this.paddleRoot.add(this.cueAura)
 
     this.ballRoot.position.z = RENDER.depth.ball
     this.root.add(this.ballRoot)
@@ -139,12 +192,44 @@ export class ActorRenderer {
     this.pulseTimer = RENDER.paddlePulse.duration
   }
 
+  /**
+   * Dresses the paddle as the running power-up: aura, face sticker and emissive
+   * tint, all in the power-up's colour. `null` restores the bare red bar.
+   */
+  setCueType(type: PowerUpType | null): void {
+    if (type === this.cueType) return
+    this.cueType = type
+    if (type === null) {
+      this.cuePlate.visible = false
+      this.cueAura.visible = false
+      this.paddleBodyMaterial.color.setHex(hexToInt(PALETTE.paddle))
+      this.paddleBodyMaterial.emissive.setHex(NO_EMISSIVE)
+      return
+    }
+    const colour = hexToInt(PALETTE.powerUp[type])
+    this.cuePlate.visible = true
+    this.cuePlateMaterial.map = this.textures.cardIcons[type]
+    this.cuePlateMaterial.color.setHex(CUE_PLATE_TINT)
+    this.cuePlateMaterial.needsUpdate = true
+    this.cueAura.visible = true
+    this.cueAuraMaterial.color.setHex(colour)
+    this.paddleBodyMaterial.color.setHex(colour)
+    this.paddleBodyMaterial.emissive.setHex(colour)
+    this.paddleBodyMaterial.emissiveIntensity = RENDER.paddleCue.glow
+  }
+
+  /** Reduced-motion toggle: 0 freezes the cue pulse (the colour cue stays). */
+  setMotionScale(scale: number): void {
+    this.motionScale = scale
+  }
+
   /** Drops transient actors without touching the pools (level change). */
   clear(): void {
     for (let slot = 0; slot < this.slotIds.length; slot += 1) this.releaseSlot(slot)
     for (const laser of this.lasers) laser.visible = false
     this.pulseTimer = 0
     this.paddlePulse = 0
+    this.setCueType(null)
   }
 
   dispose(): void {
@@ -175,6 +260,20 @@ export class ActorRenderer {
       cannon.visible = world.laserEnabled
       cannon.position.y = paddle.halfHeight + CANNON_SIZE.height * 0.4
     }
+
+    if (this.cuePlate.visible) {
+      const pulse =
+        1 +
+        Math.sin(this.elapsed * RENDER.paddleCue.pulseSpeed) *
+          RENDER.paddleCue.pulse *
+          this.motionScale
+      this.cuePlate.scale.setScalar(pulse)
+      this.cueAura.scale.set(
+        paddle.halfWidth * 2 * RENDER.paddleCue.aura.halfWidthScale * pulse,
+        RENDER.paddleCue.aura.height * pulse,
+        1,
+      )
+    }
   }
 
   private syncBalls(world: World, alpha: number): void {
@@ -187,6 +286,7 @@ export class ActorRenderer {
       ink.visible = ball.active
       body.visible = ball.active
       if (!ball.active) continue
+      this.applyBallType(index, ball.type)
       const x = lerp(ball.prev.x, ball.pos.x, alpha)
       const y = lerp(ball.prev.y, ball.pos.y, alpha)
       ink.position.set(x, y, 0)
@@ -269,7 +369,7 @@ export class ActorRenderer {
     const materials: Material[] = [
       createInkMaterial(),
       createPaperMaterial(null),
-      new MeshLambertMaterial({ color: hexToInt(PALETTE.paddle), flatShading: true }),
+      this.paddleBodyMaterial,
     ]
     this.materials.push(...materials)
     const layers = [RENDER.paddleLayers.ink, RENDER.paddleLayers.paper, RENDER.paddleLayers.body]
@@ -304,14 +404,18 @@ export class ActorRenderer {
     const geometry = new IcosahedronGeometry(BALL.radius, 1)
     this.geometries.push(geometry)
     const inkMaterial = createOutlineMaterial()
-    const bodyMaterial = new MeshLambertMaterial({
-      color: BALL_COLOUR,
-      emissive: BALL_COLOUR,
-      emissiveIntensity: BALL_GLOW,
-      flatShading: true,
-    })
-    this.materials.push(inkMaterial, bodyMaterial)
+    this.materials.push(inkMaterial)
     for (let index = 0; index < BALL.maxCount; index += 1) {
+      // Each slot owns its material so the flavour colour can change per ball.
+      const bodyMaterial = new MeshLambertMaterial({
+        color: BALL_COLOUR,
+        emissive: BALL_COLOUR,
+        emissiveIntensity: BALL_GLOW,
+        flatShading: true,
+      })
+      this.materials.push(bodyMaterial)
+      this.ballMaterials.push(bodyMaterial)
+      this.ballTypes.push(null)
       const ink = new Mesh(geometry, inkMaterial)
       ink.scale.setScalar(RENDER.outlineScale.actor)
       ink.visible = false
@@ -322,6 +426,17 @@ export class ActorRenderer {
       this.ballRoot.add(ink)
       this.ballRoot.add(body)
     }
+  }
+
+  /** Paints a ball slot for its flavour, only when the flavour actually changes. */
+  private applyBallType(index: number, type: BallType): void {
+    if (this.ballTypes[index] === type) return
+    this.ballTypes[index] = type
+    const colour = BALL_TYPE_COLOURS[type]
+    const material = this.ballMaterials[index]
+    material.color.setHex(colour)
+    material.emissive.setHex(colour)
+    material.emissiveIntensity = type === 'standard' ? BALL_GLOW : BALL_SPECIAL_GLOW
   }
 
   private buildCards(): void {

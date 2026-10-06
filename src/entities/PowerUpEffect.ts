@@ -1,5 +1,6 @@
 import { PADDLE, POWER_UPS } from '../config/gameConfig'
-import type { Ball, Paddle, PowerUpType } from './types'
+import { rollSpecialBallType } from './ballBehavior'
+import type { Ball, BallType, Paddle, PowerUpType } from './types'
 
 /**
  * Capabilities a power-up effect may touch. `World` implements this, so
@@ -13,6 +14,7 @@ export interface PowerUpTarget {
   addBalls(count: number): void
   setSpeedFactor(factor: number): void
   setLaserEnabled(enabled: boolean): void
+  setBallType(type: BallType): void
   addLife(): void
 }
 
@@ -73,6 +75,14 @@ const lifeEffect: PowerUpEffect = {
   revert: noop,
 }
 
+const powerBallEffect: PowerUpEffect = {
+  type: 'powerBall',
+  duration: POWER_UPS.durations.powerBall,
+  // Each pickup rolls a fresh flavour, so the special ball keeps surprising.
+  apply: (target) => target.setBallType(rollSpecialBallType()),
+  revert: (target) => target.setBallType('standard'),
+}
+
 export const powerUpEffects: Readonly<Record<PowerUpType, PowerUpEffect>> = {
   wide: wideEffect,
   multi: multiEffect,
@@ -80,6 +90,7 @@ export const powerUpEffects: Readonly<Record<PowerUpType, PowerUpEffect>> = {
   fast: fastEffect,
   laser: laserEffect,
   life: lifeEffect,
+  powerBall: powerBallEffect,
 }
 
 export const SPEED_POWER_UPS: readonly PowerUpType[] = ['slow', 'fast']

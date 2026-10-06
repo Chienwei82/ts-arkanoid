@@ -278,3 +278,96 @@ describe('CollisionSystem pickups and lasers', () => {
     expect(bolt.active).toBe(false)
   })
 })
+
+describe('special ball behaviours', () => {
+  it('lets the heavy ball shatter a tough brick in one hit', () => {
+    const scene = withBricks(['+++..........'])
+    const tough = scene.world.bricks[1]
+    const ball = launchBall(
+      scene.world,
+      tough.pos.x,
+      bottomOf(tough.pos.y, tough.halfHeight),
+      0,
+      30,
+    )
+    ball.type = 'heavy'
+
+    scene.collision.update(scene.world)
+
+    expect(tough.alive).toBe(false)
+  })
+
+  it('keeps the standard ball chipping tough bricks instead', () => {
+    const scene = withBricks(['+++..........'])
+    const tough = scene.world.bricks[1]
+    const ball = launchBall(
+      scene.world,
+      tough.pos.x,
+      bottomOf(tough.pos.y, tough.halfHeight),
+      0,
+      30,
+    )
+
+    scene.collision.update(scene.world)
+
+    expect(ball.type).toBe('standard')
+    expect(tough.alive).toBe(true)
+    expect(tough.hitsLeft).toBe(BRICK.toughHits - 1)
+  })
+
+  it('never lets a lethal ball break an indestructible brick', () => {
+    const scene = withBricks(['X#........'])
+    const solid = scene.world.bricks[0]
+    const ball = launchBall(
+      scene.world,
+      solid.pos.x,
+      bottomOf(solid.pos.y, solid.halfHeight),
+      0,
+      30,
+    )
+    ball.type = 'heavy'
+
+    scene.collision.update(scene.world)
+
+    expect(solid.alive).toBe(true)
+  })
+
+  it('lets the fire ball chain through its immediate neighbours', () => {
+    const scene = withBricks(['###..........'])
+    const destroyed = collect(scene.bus, 'brickDestroyed')
+    const middle = scene.world.bricks[1]
+    const ball = launchBall(
+      scene.world,
+      middle.pos.x,
+      bottomOf(middle.pos.y, middle.halfHeight),
+      0,
+      30,
+    )
+    ball.type = 'fire'
+
+    scene.collision.update(scene.world)
+
+    expect(destroyed).toHaveLength(3)
+    expect(destroyed[0].chain).toBe(false)
+    expect(destroyed.slice(1).every((event) => event.chain)).toBe(true)
+  })
+
+  it('lets the bomb clear the whole neighbourhood', () => {
+    const scene = withBricks(['###..........'])
+    const destroyed = collect(scene.bus, 'brickDestroyed')
+    const middle = scene.world.bricks[1]
+    const ball = launchBall(
+      scene.world,
+      middle.pos.x,
+      bottomOf(middle.pos.y, middle.halfHeight),
+      0,
+      30,
+    )
+    ball.type = 'bomb'
+
+    scene.collision.update(scene.world)
+
+    expect(destroyed).toHaveLength(3)
+    expect(scene.world.destructibleAlive).toBe(false)
+  })
+})

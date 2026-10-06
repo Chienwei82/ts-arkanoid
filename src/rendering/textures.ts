@@ -1,6 +1,7 @@
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type Texture } from 'three'
 import { PALETTE } from '../config/palette'
 import type { PowerUpType } from '../entities/types'
+import type { BrickMaterial } from './brickMaterial'
 
 /**
  * Every texture is painted on a canvas at start-up: the papercraft look needs
@@ -123,6 +124,158 @@ const paintChecker = (): CanvasTexture => {
   return toTexture(canvas, [1, 1])
 }
 
+/** Random speckle used by concrete: light and dark grains plus a few cracks. */
+const paintConcrete = (): CanvasTexture => {
+  const canvas = createCanvas(FIBER_SIZE)
+  const ctx = canvas.getContext('2d')
+  if (ctx !== null) {
+    ctx.fillStyle = '#f6f4ef'
+    ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
+    for (let i = 0; i < 700; i += 1) {
+      ctx.fillStyle = Math.random() > 0.5 ? 'rgba(90, 90, 90, 0.1)' : 'rgba(255, 255, 255, 0.5)'
+      ctx.fillRect(
+        Math.random() * FIBER_SIZE,
+        Math.random() * FIBER_SIZE,
+        Math.random() * 3 + 0.5,
+        Math.random() * 3 + 0.5,
+      )
+    }
+    ctx.strokeStyle = 'rgba(60, 60, 60, 0.4)'
+    ctx.lineWidth = 2
+    for (let crack = 0; crack < 3; crack += 1) {
+      let x = Math.random() * FIBER_SIZE
+      let y = Math.random() * FIBER_SIZE
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      for (let segment = 0; segment < 4; segment += 1) {
+        x += (Math.random() - 0.5) * 30
+        y += (Math.random() - 0.5) * 30
+        ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+    }
+  }
+  return toTexture(canvas, [1, 1])
+}
+
+/** Wooden crate: three planks with seams and a light grain streak pass. */
+const paintPlanks = (): CanvasTexture => {
+  const canvas = createCanvas(FIBER_SIZE)
+  const ctx = canvas.getContext('2d')
+  if (ctx !== null) {
+    ctx.fillStyle = '#fdf6ea'
+    ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
+    const planks = 3
+    const step = FIBER_SIZE / planks
+    ctx.strokeStyle = 'rgba(74, 48, 30, 0.42)'
+    ctx.lineWidth = 3
+    for (let i = 1; i < planks; i += 1) {
+      ctx.beginPath()
+      ctx.moveTo(0, i * step)
+      ctx.lineTo(FIBER_SIZE, i * step)
+      ctx.stroke()
+    }
+    ctx.strokeStyle = 'rgba(120, 84, 52, 0.18)'
+    ctx.lineWidth = 1
+    for (let i = 0; i < 26; i += 1) {
+      const x = Math.random() * FIBER_SIZE
+      const y = Math.random() * FIBER_SIZE
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      ctx.lineTo(x + 12 + Math.random() * 26, y + (Math.random() - 0.5) * 3)
+      ctx.stroke()
+    }
+  }
+  return toTexture(canvas, [1, 1])
+}
+
+/** Sheet metal: brushed streaks, an inset panel border and four rivets. */
+const paintMetalPanel = (): CanvasTexture => {
+  const canvas = createCanvas(FIBER_SIZE)
+  const ctx = canvas.getContext('2d')
+  if (ctx !== null) {
+    ctx.fillStyle = '#f4f6f8'
+    ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
+    ctx.strokeStyle = 'rgba(148, 162, 178, 0.22)'
+    ctx.lineWidth = 1
+    for (let i = 0; i < 60; i += 1) {
+      const y = Math.random() * FIBER_SIZE
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      ctx.lineTo(FIBER_SIZE, y + (Math.random() - 0.5) * 2)
+      ctx.stroke()
+    }
+    ctx.strokeStyle = 'rgba(58, 36, 23, 0.35)'
+    ctx.lineWidth = 3
+    ctx.strokeRect(10, 10, FIBER_SIZE - 20, FIBER_SIZE - 20)
+    ctx.fillStyle = 'rgba(58, 36, 23, 0.5)'
+    const rivets: readonly (readonly [number, number])[] = [
+      [18, 18],
+      [FIBER_SIZE - 18, 18],
+      [18, FIBER_SIZE - 18],
+      [FIBER_SIZE - 18, FIBER_SIZE - 18],
+    ]
+    for (const [x, y] of rivets) {
+      ctx.beginPath()
+      ctx.arc(x, y, 5, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  return toTexture(canvas, [1, 1])
+}
+
+/** Hazard crate: diagonal dark stripes over a near-white base (TNT-style). */
+const paintHazard = (): CanvasTexture => {
+  const canvas = createCanvas(FIBER_SIZE)
+  const ctx = canvas.getContext('2d')
+  if (ctx !== null) {
+    ctx.fillStyle = '#fdf6ea'
+    ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
+    ctx.strokeStyle = 'rgba(58, 36, 23, 0.5)'
+    ctx.lineWidth = 12
+    const step = 30
+    for (let x = -FIBER_SIZE; x < FIBER_SIZE * 2; x += step * 2) {
+      ctx.beginPath()
+      ctx.moveTo(x, FIBER_SIZE)
+      ctx.lineTo(x + FIBER_SIZE, 0)
+      ctx.stroke()
+    }
+  }
+  return toTexture(canvas, [1, 1])
+}
+
+/** Window pane: a glass gradient with an ink mullion cross and outer frame. */
+const paintWindow = (): CanvasTexture => {
+  const canvas = createCanvas(FIBER_SIZE)
+  const ctx = canvas.getContext('2d')
+  if (ctx !== null) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, FIBER_SIZE)
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)')
+    gradient.addColorStop(1, 'rgba(198, 212, 234, 1)')
+    ctx.fillStyle = gradient
+    ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
+    ctx.strokeStyle = 'rgba(58, 36, 23, 0.5)'
+    ctx.lineWidth = 8
+    ctx.beginPath()
+    ctx.moveTo(FIBER_SIZE / 2, 0)
+    ctx.lineTo(FIBER_SIZE / 2, FIBER_SIZE)
+    ctx.moveTo(0, FIBER_SIZE / 2)
+    ctx.lineTo(FIBER_SIZE, FIBER_SIZE / 2)
+    ctx.stroke()
+    ctx.lineWidth = 12
+    ctx.strokeRect(0, 0, FIBER_SIZE, FIBER_SIZE)
+  }
+  return toTexture(canvas, [1, 1])
+}
+
+/** Every painted brick-material detail, keyed by the material family. */
+const paintBrickMaterials = (): Readonly<Record<BrickMaterial, CanvasTexture>> => ({
+  wood: paintPlanks(),
+  metal: paintMetalPanel(),
+  concrete: paintConcrete(),
+  explosive: paintHazard(),
+})
+
 /** Sticker recipe: colour fill, thick paper halo, thin ink border. */
 const paintIcon = (
   colour: string,
@@ -224,6 +377,13 @@ const paintIcons = (): Readonly<Record<PowerUpType, CanvasTexture>> => ({
     ctx.bezierCurveTo(108, 22, 118, 74, 64, 112)
     ctx.closePath()
   }),
+  powerBall: paintIcon(PALETTE.powerUp.powerBall, (ctx) => {
+    ctx.moveTo(64, 10)
+    ctx.lineTo(106, 64)
+    ctx.lineTo(64, 118)
+    ctx.lineTo(22, 64)
+    ctx.closePath()
+  }),
 })
 
 /** All textures one renderer instance needs, owned and disposed as a unit. */
@@ -236,6 +396,8 @@ export class CraftTextures {
   readonly panelPaper: CanvasTexture
   readonly cardPaper: CanvasTexture
   readonly cardIcons: Readonly<Record<PowerUpType, CanvasTexture>>
+  readonly brickMaterials: Readonly<Record<BrickMaterial, CanvasTexture>>
+  readonly windowGlass: CanvasTexture
 
   constructor() {
     this.sky = paintSky()
@@ -246,6 +408,8 @@ export class CraftTextures {
     this.panelPaper = paintFiber([7, 5])
     this.cardPaper = paintFiber([2, 2])
     this.cardIcons = paintIcons()
+    this.brickMaterials = paintBrickMaterials()
+    this.windowGlass = paintWindow()
   }
 
   dispose(): void {
@@ -258,6 +422,8 @@ export class CraftTextures {
       this.panelPaper,
       this.cardPaper,
       ...Object.values(this.cardIcons),
+      ...Object.values(this.brickMaterials),
+      this.windowGlass,
     ]
     for (const texture of all) texture.dispose()
   }

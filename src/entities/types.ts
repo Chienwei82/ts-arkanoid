@@ -3,13 +3,21 @@ import type { BrickBehavior } from './BrickBehavior'
 
 export type BrickType = 'normal' | 'tough' | 'indestructible' | 'explosive'
 
-export type PowerUpType = 'wide' | 'multi' | 'slow' | 'fast' | 'laser' | 'life'
+export type PowerUpType = 'wide' | 'multi' | 'slow' | 'fast' | 'laser' | 'life' | 'powerBall'
+
+/**
+ * Ball flavours. `standard` is the plain ball; the others swap in the matching
+ * behaviour from `BallBehavior` while a "power ball" effect is running.
+ */
+export type BallType = 'standard' | 'fire' | 'heavy' | 'bomb'
 
 export interface Ball {
   readonly id: number
   readonly pos: Vec2
   readonly prev: Vec2
   readonly vel: Vec2
+  /** Behaviour flavour; power-ups can switch it while their effect runs. */
+  type: BallType
   radius: number
   active: boolean
   /** Attached to the paddle until the launch command arrives. */

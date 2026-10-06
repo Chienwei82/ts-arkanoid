@@ -14,6 +14,7 @@ export const POWER_UP_LABEL: Readonly<Record<PowerUpType, string>> = {
   fast: 'Bola rápida',
   laser: 'Láser',
   life: 'Vida extra',
+  powerBall: 'Bola especial',
 }
 
 export const POWER_UP_GLYPH: Readonly<Record<PowerUpType, string>> = {
@@ -23,4 +24,5 @@ export const POWER_UP_GLYPH: Readonly<Record<PowerUpType, string>> = {
   fast: '⚡',
   laser: '⇡',
   life: '♥',
+  powerBall: '✦',
 }

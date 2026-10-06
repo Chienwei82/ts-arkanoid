@@ -2,9 +2,10 @@
 
 Arkanoid/Breakout en 3D con **three.js**, **React** y **TypeScript estricto**, con una
 dirección de arte _papercraft × voxel_ inspirada en _Paper Mario: Color Splash_ y en los
-tableros de Super Mario: cielo ilustrado, nubes y colinas de papel recortado, plataformas
-flotantes con damero, bloques voxel y ladrillos construidos con tres capas (casete de tinta,
-marco de papel y cuerpo tintado).
+tableros de Super Mario: un escenario de obra urbana con cielo ilustrado y nubes de papel
+recortado, una fachada de edificio con ventanas que se encienden al azar, andamios, tuberías,
+depósito de agua y antena en la azotea, bloques voxel y cajas de tres capas (casete de tinta,
+marco de papel y cuerpo tintado) en madera, metal y hormigón.
 
 - Motor de juego **sin dependencias de three.js ni React** (testeable en Node).
 - **Timestep fijo** para la física y render **interpolado**.
@@ -175,8 +176,9 @@ controles) y a `audio/`, que tampoco conocen three ni React. El motor sólo ve d
 - **Entity + composición**: los actores son datos planos (`Ball`, `Paddle`, `Brick`, `PowerUp`)
   y los sistemas los procesan por lotes.
 - **Strategy**: `BrickBehavior` (normal, resistente, indestructible y explosivo con cadena de
-  detonaciones) y `PowerUpEffect` (ancho, multibola, lento, rápido, láser, vida) con
-  `apply`/`revert` y duración opcional.
+  detonaciones), `BallBehavior` (bola normal, de fuego, pesada y bomba) y `PowerUpEffect`
+  (ancho, multibola, lento, rápido, láser, vida y bola especial) con `apply`/`revert` y duración
+  opcional.
 - **Factory**: `createBricks` y `createPowerUp`/`rollPowerUpType` construyen entidades a partir
   de los datos de nivel; añadir un nivel nuevo no toca lógica.
 - **Object Pool** (`utils/ObjectPool`): power-ups, bolts de láser y las 600 piezas de confeti.
@@ -215,9 +217,10 @@ niveles (`IGNICIÓN`, `FORTÍN`, `LABERINTO`, `NÚCLEO`).
 
 ## Efectos visuales y rendimiento
 
-- Ladrillos: **tres `InstancedMesh`** por nivel (casete de tinta, marco de papel, cuerpo
-  tintado) → un campo de ~90 ladrillos cuesta 3 _draw calls_. Sólo se reescriben las matrices
-  de los ladrillos que están animándose (pulso de impacto o desintegración con giro y caída).
+- Ladrillos: **tres `InstancedMesh` por material** presente en el nivel (casete de tinta, marco
+  de papel, cuerpo tintado) → madera, metal, hormigón y caja de peligro, cada familia con su
+  textura pintada. Un campo de ~90 ladrillos cuesta unos pocos _draw calls_ y sólo se reescriben
+  las matrices de los ladrillos que están animándose (pulso de impacto o desintegración).
 - Confeti: un `InstancedMesh` de 600 piezas recicladas con pool; cada rotura estalla con el
   color del ladrillo (más pequeña en las explosiones en cadena, que además lanzan una onda).
 - Estela: `Points` con `BufferGeometry` de tamaño fijo (ring buffer) y blending aditivo.

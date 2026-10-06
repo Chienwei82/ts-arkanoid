@@ -1,7 +1,15 @@
 import { BALL, FIELD, PADDLE, POWER_UPS, SCORING } from '../config/gameConfig'
 import { PADDLE_WIDE_HALF_WIDTH, type PowerUpTarget } from '../entities/PowerUpEffect'
 import { createPowerUp } from '../entities/powerUpFactory'
-import type { Ball, Brick, LaserBolt, Paddle, PowerUp, PowerUpType } from '../entities/types'
+import type {
+  Ball,
+  BallType,
+  Brick,
+  LaserBolt,
+  Paddle,
+  PowerUp,
+  PowerUpType,
+} from '../entities/types'
 import { copyVec, setVec, vec2 } from '../utils/math'
 import { ObjectPool } from '../utils/ObjectPool'
 
@@ -15,6 +23,7 @@ const createBall = (id: number): Ball => ({
   pos: vec2(),
   prev: vec2(),
   vel: vec2(),
+  type: 'standard',
   radius: BALL.radius,
   active: false,
   stuck: false,
@@ -116,6 +125,7 @@ export class World implements PowerUpTarget {
     for (const ball of this.balls) {
       ball.active = false
       ball.stuck = false
+      ball.type = 'standard'
       ball.vel.x = 0
       ball.vel.y = 0
     }
@@ -137,6 +147,7 @@ export class World implements PowerUpTarget {
     if (ball === undefined) return undefined
     ball.active = true
     ball.stuck = true
+    ball.type = 'standard'
     ball.radius = BALL.radius
     ball.stuckOffset = 0
     ball.vel.x = 0
@@ -181,6 +192,7 @@ export class World implements PowerUpTarget {
       clone.active = true
       clone.stuck = false
       clone.stuckOffset = 0
+      clone.type = source.type
       clone.radius = source.radius
       copyVec(clone.pos, source.pos)
       copyVec(clone.prev, source.pos)
@@ -221,6 +233,13 @@ export class World implements PowerUpTarget {
 
   setLaserEnabled(enabled: boolean): void {
     this.laserEnabled = enabled
+  }
+
+  setBallType(type: BallType): void {
+    // Only live balls change flavour; stuck ones pick it up on the next launch.
+    for (const ball of this.balls) {
+      if (ball.active) ball.type = type
+    }
   }
 
   addLife(): void {

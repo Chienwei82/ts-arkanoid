@@ -10,7 +10,15 @@ import { rollPowerUpType } from '../src/entities/powerUpFactory'
 import { vec2 } from '../src/utils/math'
 import { collect, createScene } from './helpers'
 
-const ALL_TYPES: readonly PowerUpType[] = ['wide', 'multi', 'slow', 'fast', 'laser', 'life']
+const ALL_TYPES: readonly PowerUpType[] = [
+  'wide',
+  'multi',
+  'slow',
+  'fast',
+  'laser',
+  'life',
+  'powerBall',
+]
 
 const paddleStub = (): Paddle => ({
   pos: vec2(),
@@ -39,6 +47,7 @@ const createTarget = (): Stub => {
     addBalls: (count) => calls.push(`balls:${count}`),
     setSpeedFactor: (factor) => calls.push(`speed:${factor}`),
     setLaserEnabled: (enabled) => calls.push(`laser:${enabled}`),
+    setBallType: (type) => calls.push(`ball:${type}`),
     addLife: () => calls.push('life'),
   }
   return { target, calls }
@@ -89,6 +98,15 @@ describe('power-up effects (Strategy)', () => {
     powerUpEffects.life.apply(target)
     expect(calls).toEqual(['laser:true', 'laser:false', 'life'])
     expect(powerUpEffects.life.duration).toBeNull()
+  })
+
+  it('hands out a special ball flavour and restores the standard one', () => {
+    const { target, calls } = createTarget()
+    powerUpEffects.powerBall.apply(target)
+    powerUpEffects.powerBall.revert(target)
+    expect(calls[0]).toMatch(/^ball:(fire|heavy|bomb)$/)
+    expect(calls[1]).toBe('ball:standard')
+    expect(powerUpEffects.powerBall.duration).toBe(POWER_UPS.durations.powerBall)
   })
 })
 
