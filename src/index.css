@@ -1,0 +1,25 @@
+/* Global reset. The papercraft theme itself lives in src/ui/ui.css. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* Matches the sky gradient so there is no white flash before the canvas paints. */
+  background: linear-gradient(180deg, #5fb8ff 0%, #b8e4ff 48%, #ffe9c2 100%);
+}
