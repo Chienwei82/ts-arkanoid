@@ -49,14 +49,14 @@ interface GradeUniforms {
   time: { value: number }
 }
 
-/** Post-processing chain: render, bloom, grade, output. */
+/** Post-processing chain: render, optional bloom, grade, output. */
 export class PostFX {
   private readonly composer: EffectComposer
-  private readonly bloom: UnrealBloomPass
+  private readonly bloom: UnrealBloomPass | null
   private readonly grade: ShaderPass
   private readonly uniforms: GradeUniforms
 
-  constructor(renderer: WebGLRenderer, scene: Scene, camera: Camera) {
+  constructor(renderer: WebGLRenderer, scene: Scene, camera: Camera, bloomEnabled = true) {
     this.uniforms = {
       tDiffuse: { value: null },
       vignette: { value: RENDER.vignette },
@@ -68,13 +68,16 @@ export class PostFX {
     this.composer = new EffectComposer(renderer)
     this.composer.addPass(new RenderPass(scene, camera))
 
-    this.bloom = new UnrealBloomPass(
-      new Vector2(1, 1),
-      RENDER.bloom.strength,
-      RENDER.bloom.radius,
-      RENDER.bloom.threshold,
-    )
-    this.composer.addPass(this.bloom)
+    // Bloom is the expensive pass; the reduced-quality preset drops it.
+    this.bloom = bloomEnabled
+      ? new UnrealBloomPass(
+          new Vector2(1, 1),
+          RENDER.bloom.strength,
+          RENDER.bloom.radius,
+          RENDER.bloom.threshold,
+        )
+      : null
+    if (this.bloom !== null) this.composer.addPass(this.bloom)
 
     this.grade = new ShaderPass({
       uniforms: this.uniforms,
@@ -100,7 +103,7 @@ export class PostFX {
 
   dispose(): void {
     this.composer.dispose()
-    this.bloom.dispose()
+    this.bloom?.dispose()
     this.grade.dispose()
   }
 }

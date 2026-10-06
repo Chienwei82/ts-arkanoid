@@ -1,4 +1,5 @@
 import type { HudState } from '../core/types'
+import type { TouchInput } from '../systems/TouchInput'
 
 /**
  * Thin contract between the engine and React. The UI only ever talks to this
@@ -16,6 +17,8 @@ export interface GameFacade {
   /** Cached snapshot for useSyncExternalStore; identity changes only on news. */
   readonly getSnapshot: () => HudState
   readonly subscribe: (listener: () => void) => () => void
+  /** Sink for the on-screen touch controls; feeds the shared input frame. */
+  readonly touch: TouchInput
   start(): void
   togglePause(): void
   /** Opens/closes the help guide overlay (same behaviour as the H key). */

@@ -48,6 +48,7 @@ export default tseslint.config(
       'src/config/**/*.ts',
       'src/utils/**/*.ts',
       'src/bridge/**/*.ts',
+      'src/platform/**/*.ts',
     ],
     rules: {
       'no-restricted-imports': [

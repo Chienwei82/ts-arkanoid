@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GameFacade } from '../src/bridge'
 import type { HudState } from '../src/core/types'
+import type { ControlScheme } from '../src/platform/ControlScheme'
+import { TouchInput } from '../src/systems/TouchInput'
 import { Hud } from '../src/ui/Hud'
 import { Screens } from '../src/ui/Screens'
 import { GameShell } from '../src/ui/GameShell'
@@ -47,6 +49,7 @@ const createStub = (read: () => HudState): StubFacade => {
         listener = null
       }
     },
+    touch: new TouchInput(),
     start: () => calls.push('start'),
     togglePause: () => calls.push('togglePause'),
     toggleHelp: () => calls.push('toggleHelp'),
@@ -56,6 +59,21 @@ const createStub = (read: () => HudState): StubFacade => {
     notify: () => listener?.(),
   }
 }
+
+/** Screens with fixed scheme props; tests can still track scheme changes. */
+const renderScreens = (
+  hud: HudState,
+  session: StubFacade,
+  options: { scheme?: ControlScheme; onSchemeChange?: (scheme: ControlScheme) => void } = {},
+) =>
+  render(
+    <Screens
+      hud={hud}
+      session={session}
+      scheme={options.scheme ?? 'desktop'}
+      onSchemeChange={options.onSchemeChange ?? (() => undefined)}
+    />,
+  )
 
 afterEach(() => {
   cleanup()
@@ -92,7 +110,7 @@ describe('Hud', () => {
 describe('Screens', () => {
   it('starts a run from the menu panel', () => {
     const stub = createStub(() => MENU_HUD)
-    render(<Screens hud={MENU_HUD} session={stub} />)
+    renderScreens(MENU_HUD, stub)
 
     expect(screen.getByText('Paper Breaker')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'JUGAR' }))
@@ -101,15 +119,13 @@ describe('Screens', () => {
 
   it('renders nothing while playing', () => {
     const stub = createStub(() => MENU_HUD)
-    const { container } = render(
-      <Screens hud={{ ...MENU_HUD, status: 'playing' }} session={stub} />,
-    )
+    const { container } = renderScreens({ ...MENU_HUD, status: 'playing' }, stub)
     expect(container.querySelector('.panel')).toBeNull()
   })
 
   it('offers resume and quit while paused', () => {
     const stub = createStub(() => MENU_HUD)
-    render(<Screens hud={{ ...MENU_HUD, status: 'paused' }} session={stub} />)
+    renderScreens({ ...MENU_HUD, status: 'paused' }, stub)
 
     fireEvent.click(screen.getByRole('button', { name: 'CONTINUAR' }))
     fireEvent.click(screen.getByRole('button', { name: 'SALIR AL MENÚ' }))
@@ -118,11 +134,9 @@ describe('Screens', () => {
 
   it('celebrates a record on game over', () => {
     const stub = createStub(() => MENU_HUD)
-    render(
-      <Screens
-        hud={{ ...MENU_HUD, status: 'gameOver', score: 900, record: 900, isRecord: true }}
-        session={stub}
-      />,
+    renderScreens(
+      { ...MENU_HUD, status: 'gameOver', score: 900, record: 900, isRecord: true },
+      stub,
     )
 
     expect(screen.getByText('¡Nuevo récord!')).not.toBeNull()
@@ -132,24 +146,34 @@ describe('Screens', () => {
 
   it('advances to the next level and closes the campaign', () => {
     const stub = createStub(() => MENU_HUD)
-    const { unmount } = render(
-      <Screens hud={{ ...MENU_HUD, status: 'levelComplete' }} session={stub} />,
-    )
+    const { unmount } = renderScreens({ ...MENU_HUD, status: 'levelComplete' }, stub)
     fireEvent.click(screen.getByRole('button', { name: 'SIGUIENTE NIVEL' }))
     expect(stub.calls).toContain('nextLevel')
     unmount()
 
-    render(
-      <Screens hud={{ ...MENU_HUD, status: 'levelComplete', isFinalLevel: true }} session={stub} />,
-    )
+    renderScreens({ ...MENU_HUD, status: 'levelComplete', isFinalLevel: true }, stub)
     expect(screen.getByRole('button', { name: 'VOLVER AL MENÚ' })).not.toBeNull()
+  })
+
+  it('offers a discreet control-scheme change in the menu and the pause panel', () => {
+    const stub = createStub(() => MENU_HUD)
+    const onSchemeChange = vi.fn<(scheme: ControlScheme) => void>()
+    const { unmount } = renderScreens(MENU_HUD, stub, { scheme: 'desktop', onSchemeChange })
+
+    fireEvent.click(screen.getByRole('button', { name: 'TÁCTIL' }))
+    expect(onSchemeChange).toHaveBeenCalledWith('touch')
+    unmount()
+
+    renderScreens({ ...MENU_HUD, status: 'paused' }, stub, { scheme: 'touch', onSchemeChange })
+    fireEvent.click(screen.getByRole('button', { name: 'ESCRITORIO' }))
+    expect(onSchemeChange).toHaveBeenCalledWith('desktop')
   })
 })
 
 describe('HelpScreen', () => {
   it('replaces every other panel with the guide', () => {
     const stub = createStub(() => MENU_HUD)
-    render(<Screens hud={{ ...MENU_HUD, helpVisible: true }} session={stub} />)
+    renderScreens({ ...MENU_HUD, helpVisible: true }, stub)
 
     expect(screen.getByText('Guía de juego')).not.toBeNull()
     expect(screen.queryByText('Paper Breaker')).toBeNull()
@@ -157,7 +181,7 @@ describe('HelpScreen', () => {
 
   it('explains every power-up and brick type', () => {
     const stub = createStub(() => MENU_HUD)
-    render(<Screens hud={{ ...MENU_HUD, helpVisible: true }} session={stub} />)
+    renderScreens({ ...MENU_HUD, helpVisible: true }, stub)
 
     for (const name of [
       'Paleta ancha',
@@ -177,7 +201,7 @@ describe('HelpScreen', () => {
 
   it('starts the run and closes the guide from the menu', () => {
     const stub = createStub(() => MENU_HUD)
-    render(<Screens hud={{ ...MENU_HUD, helpVisible: true }} session={stub} />)
+    renderScreens({ ...MENU_HUD, helpVisible: true }, stub)
 
     fireEvent.click(screen.getByRole('button', { name: 'JUGAR' }))
     expect(stub.calls).toEqual(['toggleHelp', 'start'])
@@ -185,7 +209,7 @@ describe('HelpScreen', () => {
 
   it('closes the guide with no start button outside the menu', () => {
     const stub = createStub(() => MENU_HUD)
-    render(<Screens hud={{ ...MENU_HUD, status: 'paused', helpVisible: true }} session={stub} />)
+    renderScreens({ ...MENU_HUD, status: 'paused', helpVisible: true }, stub)
 
     expect(screen.queryByRole('button', { name: 'JUGAR' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'CERRAR' }))
@@ -197,8 +221,11 @@ describe('GameShell', () => {
   it('mounts and detaches the engine around the canvas host', () => {
     let hud: HudState = MENU_HUD
     const stub = createStub(() => hud)
+    const shell = (scheme: ControlScheme) => (
+      <GameShell session={stub} scheme={scheme} onSchemeChange={() => undefined} />
+    )
 
-    const { unmount } = render(<GameShell session={stub} />)
+    const { unmount } = render(shell('desktop'))
     expect(stub.calls).toEqual(['attach:host'])
 
     hud = { ...MENU_HUD, status: 'playing', score: 50, lives: 3 }
@@ -213,31 +240,50 @@ describe('GameShell', () => {
 
   it('rebuilds the engine on every StrictMode remount', () => {
     const stub = createStub(() => MENU_HUD)
-    const { unmount } = render(<GameShell session={stub} />)
+    const shell = () => (
+      <GameShell session={stub} scheme="desktop" onSchemeChange={() => undefined} />
+    )
+    const { unmount } = render(shell())
     unmount()
-    const second = render(<GameShell session={stub} />)
+    const second = render(shell())
 
     expect(stub.calls).toEqual(['attach:host', 'detach', 'attach:host'])
     second.unmount()
     expect(stub.calls.at(-1)).toBe('detach')
+  })
+
+  it('shows the touch controls only in touch mode during a live run', () => {
+    let hud: HudState = { ...MENU_HUD, status: 'playing' }
+    const stub = createStub(() => hud)
+    const shell = (scheme: ControlScheme) => (
+      <GameShell session={stub} scheme={scheme} onSchemeChange={() => undefined} />
+    )
+
+    const touch = render(shell('touch'))
+    expect(screen.getByRole('group', { name: 'Controles táctiles' })).not.toBeNull()
+    touch.unmount()
+
+    const desktop = render(shell('desktop'))
+    expect(screen.queryByRole('group', { name: 'Controles táctiles' })).toBeNull()
+    desktop.unmount()
+
+    hud = { ...MENU_HUD, status: 'playing', helpVisible: true }
+    const hidden = render(shell('touch'))
+    expect(screen.queryByRole('group', { name: 'Controles táctiles' })).toBeNull()
+    hidden.unmount()
   })
 })
 
 describe('module wiring', () => {
   it('renders the HUD inside the shell without an engine', () => {
     const stub = createStub(() => MENU_HUD)
-    render(<GameShell session={stub} />)
+    render(<GameShell session={stub} scheme="desktop" onSchemeChange={() => undefined} />)
     expect(screen.getAllByText('004200').length).toBeGreaterThan(0)
   })
 
   it('replaces every panel with the error screen and offers a reload', () => {
     const stub = createStub(() => MENU_HUD)
-    render(
-      <Screens
-        hud={{ ...MENU_HUD, error: { kind: 'context', message: 'Contexto perdido' } }}
-        session={stub}
-      />,
-    )
+    renderScreens({ ...MENU_HUD, error: { kind: 'context', message: 'Contexto perdido' } }, stub)
 
     expect(screen.getByText('Contexto perdido')).not.toBeNull()
     expect(screen.queryByText('Paper Breaker')).toBeNull()

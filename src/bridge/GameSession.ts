@@ -5,6 +5,7 @@ import { GAME_CANVAS_CLASS, RendererInitError } from '../core/renderer'
 import type { RendererFactory } from '../core/renderer'
 import type { HudError, HudState } from '../core/types'
 import { LEVELS, type LevelDefinition } from '../levels'
+import { TouchInput } from '../systems/TouchInput'
 import { IS_DEV } from '../utils/env'
 import { createLocalStorageRecord, type RecordStorage } from '../utils/storage'
 import type { GameFacade } from './GameFacade'
@@ -14,6 +15,8 @@ export interface GameSessionOptions {
   readonly createRenderer?: RendererFactory
   readonly storage?: RecordStorage
   readonly levels?: readonly LevelDefinition[]
+  /** Shared with the on-screen touch controls; defaults to a private one. */
+  readonly touchInput?: TouchInput
 }
 
 const UNSUPPORTED_WEBGL_MESSAGE =
@@ -39,6 +42,7 @@ export class GameSession implements GameFacade {
 
   constructor(options: GameSessionOptions = {}) {
     this.options = options
+    this.touch = options.touchInput ?? new TouchInput()
     this.snapshot = this.idleSnapshot()
   }
 
@@ -46,6 +50,9 @@ export class GameSession implements GameFacade {
   get engine(): Game | null {
     return this.game
   }
+
+  /** Survives attach/detach cycles so the touch widgets keep their state. */
+  readonly touch: TouchInput
 
   readonly getSnapshot = (): HudState => this.snapshot
 
@@ -65,6 +72,7 @@ export class GameSession implements GameFacade {
         createRenderer: this.options.createRenderer,
         storage: this.options.storage,
         levels: this.options.levels,
+        touchInput: this.touch,
       })
     } catch (cause) {
       // Renderer failures ("no WebGL at all": old browser, blocked context) get

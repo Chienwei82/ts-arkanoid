@@ -1,3 +1,5 @@
+import { TouchInput } from './TouchInput'
+
 export interface InputFrame {
   axis: number
   pointerX: number | null
@@ -24,7 +26,9 @@ export type PointerMapper = (clientX: number, clientY: number) => number
 /**
  * Listens to keyboard/pointer/visibility on the window and canvas container,
  * then hands out one reusable InputFrame per fixed step (edge flags are
- * consumed on read so a single key press never fires twice).
+ * consumed on read so a single key press never fires twice). The injected
+ * TouchInput source is folded into the same frame, so keyboard, mouse and
+ * on-screen controls all produce the very same actions.
  */
 export class InputManager {
   private readonly frame: InputFrame = {
@@ -39,6 +43,7 @@ export class InputManager {
   private readonly target: HTMLElement | null
   private readonly mapPointer: PointerMapper | null
   private readonly onHidden: () => void
+  private readonly touch: TouchInput
   private left = false
   private right = false
   private fireHeld = false
@@ -137,10 +142,16 @@ export class InputManager {
     this.onHidden()
   }
 
-  constructor(target: HTMLElement | null, mapPointer: PointerMapper | null, onHidden: () => void) {
+  constructor(
+    target: HTMLElement | null,
+    mapPointer: PointerMapper | null,
+    onHidden: () => void,
+    touch: TouchInput = new TouchInput(),
+  ) {
     this.target = target
     this.mapPointer = mapPointer
     this.onHidden = onHidden
+    this.touch = touch
   }
 
   attach(): void {
@@ -184,6 +195,9 @@ export class InputManager {
     this.edgePause = false
     this.edgeStart = false
     this.edgeHelp = false
+    // On-screen controls contribute after the keyboard/mouse base so their
+    // held and edge states can only add to it, never mask it.
+    this.touch.mergeInto(this.frame)
     return this.frame
   }
 
@@ -191,5 +205,6 @@ export class InputManager {
     this.left = false
     this.right = false
     this.fireHeld = false
+    this.touch.releaseAll()
   }
 }
