@@ -32,5 +32,7 @@ export interface HudState {
   readonly isFinalLevel: boolean
   /** Help guide overlay: open from the start and toggled with the H key. */
   readonly helpVisible: boolean
+  /** Procedural audio mute state; the UI renders its toggle from this. */
+  readonly audioEnabled: boolean
   readonly error: HudError | null
 }

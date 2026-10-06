@@ -1,5 +1,5 @@
 import { createBricks } from '../entities/brickFactory'
-import { POWER_UPS } from '../config/gameConfig'
+import { POWER_UPS, SCORING } from '../config/gameConfig'
 import { LEVELS, parseLevels, type LevelDefinition } from '../levels'
 import { CollisionSystem } from '../systems/CollisionSystem'
 import { InputDispatcher } from '../systems/InputDispatcher'
@@ -10,6 +10,7 @@ import { PowerUpSystem } from '../systems/PowerUpSystem'
 import { ScoringSystem } from '../systems/ScoringSystem'
 import { type TouchInput } from '../systems/TouchInput'
 import { World } from '../systems/World'
+import type { AudioSignals, GameAudio } from './audio'
 import type { GameEventMap } from './events'
 import { EventBus, type GameBus } from './EventBus'
 import { GameLoop } from './GameLoop'
@@ -31,6 +32,11 @@ export interface GameOptions {
   readonly levels?: readonly LevelDefinition[]
   /** Shared with the on-screen touch controls; defaults to a private one. */
   readonly touchInput?: TouchInput
+  /**
+   * Audio sink driven once per frame and subscribed to the bus. Injected by the
+   * bridge so the core stays free of WebAudio (same seam as `createRenderer`).
+   */
+  readonly audio?: GameAudio
 }
 
 /**
@@ -52,6 +58,7 @@ export class Game implements GameContext {
 
   private readonly renderer: GameRenderer | null
   private readonly loop: GameLoop
+  private readonly audio: GameAudio | null
   private disposed = false
   /** Help guide overlay: open from the very first frame and toggled with H. */
   private helpVisible = true
@@ -60,6 +67,9 @@ export class Game implements GameContext {
 
   constructor(options: GameOptions = {}) {
     this.bus = options.bus ?? new EventBus<GameEventMap>()
+    this.audio = options.audio ?? null
+    // The audio reacts to the same bus the renderer and the UI listen to.
+    this.audio?.bind(this.bus)
     this.world = new World()
     this.scoring = new ScoringSystem(this.bus, options.storage ?? createLocalStorageRecord())
     this.powerUpSystem = new PowerUpSystem(this.bus)
@@ -128,6 +138,7 @@ export class Game implements GameContext {
   }
 
   renderFrame(alpha: number, frameDelta: number): void {
+    this.audio?.update(frameDelta, this.audioSignals())
     if (this.renderer === null) return
     this.renderer.syncWorld(this.world, alpha)
     if (this.machine.status !== 'paused') this.renderer.update(frameDelta)
@@ -260,8 +271,29 @@ export class Game implements GameContext {
       isRecord: this.scoring.isRunRecord,
       isFinalLevel: this.world.levelIndex === this.levels.length - 1,
       helpVisible: this.helpVisible,
+      audioEnabled: this.audio?.enabled ?? true,
       error: null,
     }
+  }
+
+  /**
+   * Normalized tension inputs for the audio subsystem. `clearance` counts how
+   * much of the destructible wall is gone (closing in on the level clear) and
+   * `danger` how close the run is to ending.
+   */
+  private audioSignals(): AudioSignals {
+    let total = 0
+    let alive = 0
+    for (const brick of this.world.bricks) {
+      if (brick.type === 'indestructible') continue
+      total += 1
+      if (brick.alive) alive += 1
+    }
+    const clearance = total === 0 ? 1 : 1 - alive / total
+    const lifeSpan = Math.max(1, SCORING.startLives - 1)
+    const danger = clamp((SCORING.startLives - this.world.lives) / lifeSpan, 0, 1)
+    const level = this.levels.length > 1 ? this.world.levelIndex / (this.levels.length - 1) : 0
+    return { danger, level, clearance, combo: this.scoring.combo }
   }
 
   dispose(): void {
@@ -270,6 +302,7 @@ export class Game implements GameContext {
     this.loop.stop()
     this.input?.dispose()
     this.renderer?.dispose()
+    this.audio?.unbind()
     this.bus.clear()
   }
 }

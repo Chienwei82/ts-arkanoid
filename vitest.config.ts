@@ -12,7 +12,20 @@ export default defineConfig({
       reportsDirectory: 'coverage',
       // Only shipped source counts; CSS and config files are not executable logic.
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.css', 'src/main.tsx', 'src/vite-env.d.ts'],
+      exclude: [
+        'src/**/*.css',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        // The audio barrel is pure re-exports, and the WebAudio adapters need a
+        // real AudioContext (like the WebGL renderer needs a GPU): they are
+        // exercised by the manual smoke test, so only the pure audio modules
+        // (RNG, patterns, tracker, preferences) count towards the audio floor.
+        'src/audio/index.ts',
+        'src/audio/musicEngine.ts',
+        'src/audio/musicDirector.ts',
+        'src/audio/sound.ts',
+        'src/audio/audioDirector.ts',
+      ],
       /**
        * Floors measured against the current suite, per layer. There is no global
        * `src/**` floor on purpose: the aggregate would be dragged down by the
@@ -28,6 +41,7 @@ export default defineConfig({
         'src/platform/**': { statements: 95, branches: 85, functions: 95, lines: 95 },
         'src/bridge/**': { statements: 90, branches: 55, functions: 90, lines: 90 },
         'src/ui/**': { statements: 90, branches: 90, functions: 90, lines: 90 },
+        'src/audio/**': { statements: 95, branches: 75, functions: 95, lines: 95 },
         'src/rendering/**': { statements: 0, branches: 0, functions: 0, lines: 0 },
       },
     },

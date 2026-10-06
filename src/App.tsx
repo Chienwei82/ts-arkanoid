@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { AudioDirector } from './audio'
 import { GameSession } from './bridge'
 import {
   createLocalStorageControlScheme,
@@ -12,6 +13,14 @@ import { ErrorBoundary } from './ui/ErrorBoundary'
 import { GameShell } from './ui/GameShell'
 
 /**
+ * One audio system for the whole app: its AudioContext has to survive React
+ * StrictMode's double mount and every engine attach/detach, so it lives at
+ * module scope (the same reason the tetris project builds it in its entry
+ * point) instead of inside a `useState` initializer.
+ */
+const audio = new AudioDirector()
+
+/**
  * Composition root: the only place that knows both the engine and the three.js
  * renderer, which keeps every other module free of that coupling. It also owns
  * the boot-time control scheme: the scene starts only once the input style is
@@ -19,7 +28,7 @@ import { GameShell } from './ui/GameShell'
  * is not — and the choice is persisted so the question is asked only once.
  */
 const App = () => {
-  const [session] = useState(() => new GameSession({ createRenderer: createGameRenderer }))
+  const [session] = useState(() => new GameSession({ createRenderer: createGameRenderer, audio }))
   const [storage] = useState(createLocalStorageControlScheme)
   const [scheme, setScheme] = useState<ControlScheme | null>(() =>
     resolveControlScheme(storage.load(), detectDevice(collectDeviceSignals())),

@@ -4,7 +4,7 @@ import { PHYSICS, SCORING } from '../src/config/gameConfig'
 import type { HudState } from '../src/core/types'
 import type { LevelDefinition } from '../src/levels'
 import { createMemoryRecord } from '../src/utils/storage'
-import { testLevel } from './helpers'
+import { createAudioSpy, testLevel } from './helpers'
 
 const LEVELS: readonly LevelDefinition[] = [
   testLevel(['#'], { name: 'UNO' }),
@@ -117,6 +117,31 @@ describe('GameSession bridge', () => {
     session.start()
 
     expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('exposes and toggles the audio system through the facade', () => {
+    const spy = createAudioSpy()
+    const session = new GameSession({
+      levels: LEVELS,
+      storage: createMemoryRecord(0),
+      audio: spy.audio,
+    })
+    expect(session.isAudioEnabled()).toBe(true)
+
+    session.attach(null)
+    session.toggleAudio()
+
+    expect(session.isAudioEnabled()).toBe(false)
+    expect(session.getSnapshot().audioEnabled).toBe(false)
+    expect(spy.toggles).toBe(1)
+  })
+
+  it('is inert for audio when no system was injected', () => {
+    const session = createSession()
+    expect(session.isAudioEnabled()).toBe(true)
+    expect(() => {
+      session.toggleAudio()
+    }).not.toThrow()
   })
 
   it('publishes a friendly error when the renderer cannot start', () => {

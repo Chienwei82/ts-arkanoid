@@ -13,6 +13,8 @@ marco de papel y cuerpo tintado).
 - Post-procesado con `EffectComposer`: **bloom** suave + pase propio de **viñeta y grano de papel**.
 - Puente delgado motor↔React mediante **store externo** (`useSyncExternalStore`); el motor
   nunca conoce a React.
+- **Audio procedural 100 % WebAudio** (sin ficheros): música generada por semilla con semillas
+  curadas por nivel y efectos sintetizados que reaccionan a los eventos del juego.
 
 ## Requisitos
 
@@ -65,9 +67,10 @@ npm install               # instala dependencias
 npm run dev               # servidor de desarrollo (Vite)
 npm run build             # typecheck (TS 7) + build de producción en dist/
 npm run preview           # sirve el build de producción
-npm test                  # Vitest (184 pruebas)
+npm test                  # Vitest (273 pruebas)
 npm run test:watch        # Vitest en modo watch
 npm run test:coverage     # tests + informe de cobertura con umbrales por capa
+npm run curate            # elige semillas de canción para la música procedural
 npm run typecheck         # tsc -b  → TypeScript 7 nativo
 npm run typecheck:ts6     # tsc6 -b → TypeScript 6 (paridad de diagnóstico)
 npm run lint              # ESLint (flat config, reglas type-aware) sin warnings
@@ -90,6 +93,7 @@ un nombre mDNS (`mi-portatil.local`), añádelo a `server.allowedHosts`.
 | Pausa                             | botón PAUSA (táctil)                 | `ESC` o `P`                  |
 | Guía de power-ups y bloques       | botón AYUDA (táctil)                 | `H`                          |
 | Confirmar (menú, siguiente nivel) | botones de la UI                     | `ESPACIO` / `ENTER`          |
+| Silenciar música y efectos        | botón SONIDO (menú y pausa)          | —                            |
 
 ### Controles táctiles en pantalla
 
@@ -124,12 +128,16 @@ una pantalla de selección decide antes de arrancar la escena. La elección se g
 src/
   config/      gameConfig.ts (ajustes de juego y de render), palette.ts (paleta compartida)
   core/        GameLoop (timestep fijo), Game (orquestador), EventBus, states/ (State pattern)
+               y audio.ts (contrato GameAudio, que aísla el core de WebAudio)
   entities/    tipos + BrickBehavior y PowerUpEffect (Strategy) + factories (Factory)
   systems/     World, PhysicsSystem, CollisionSystem, ScoringSystem, PowerUpSystem,
                LaserSystem, comandos (Command) e input (InputManager/InputDispatcher/TouchInput)
   platform/    entorno navegador: ViewportManager (resize/orientación/visualViewport),
                DeviceDetector (con nivel de confianza) y ControlScheme (elección persistida)
   levels/      definiciones de nivel como datos + validación y cálculo de la cuadrícula
+  audio/       RNG por semilla, patrones musicales, medidor de intensidad y preferencias
+               (puros, testables en Node) + MusicEngine/MusicDirector/SoundFX/AudioDirector
+               (WebAudio; implementan el contrato GameAudio)
   rendering/   escena papercraft: SceneBuilder, BrickRenderer, ActorRenderer,
                ConfettiSystem, BallTrail, ExplosionWaves, ScreenShake, PostFX,
                texturas generadas por canvas y CraftGameRenderer (implementa GameRenderer)
@@ -146,12 +154,16 @@ ui/ (React) ──► bridge/ ──► core/ ──► systems/ ──► entit
                               ▲
                               │ implementa GameRenderer
                         rendering/ (three.js)
+                              ▲
+                              │ implementa GameAudio
+                        audio/ (WebAudio)
 ```
 
 `rendering/` es la única capa que importa three.js y `ui/` la única que importa React; una
 regla de ESLint (`no-restricted-imports`) impide romper esa frontera por accidente y aplica
 también a `platform/` (servicios del navegador: viewport, detección de dispositivo y esquema de
-controles), que tampoco conoce three ni React.
+controles) y a `audio/`, que tampoco conocen three ni React. El motor sólo ve dos interfaces:
+`GameRenderer` y `GameAudio`.
 
 ## Arquitectura y patrones
 
@@ -170,8 +182,9 @@ controles), que tampoco conoce three ni React.
 - **Object Pool** (`utils/ObjectPool`): power-ups, bolts de láser y las 600 piezas de confeti.
 - **Command + input abstraction** (`systems/commands.ts`, `InputManager`, `InputDispatcher`):
   teclado, puntero, táctil y `visibilitychange` se traducen a comandos reutilizados.
-- **Inyección de dependencias por constructor**: `Game` recibe `storage`, `bus`, `levels` y la
-  fábrica de render (`createRenderer`). Sin singletons globales ocultos.
+- **Inyección de dependencias por constructor**: `Game` recibe `storage`, `bus`, `levels`, la
+  fábrica de render (`createRenderer`) y el sistema de audio (`audio`). Sin singletons globales
+  ocultos.
 - **Bucle**: `GameLoop` acumula tiempo y avanza la simulación en pasos fijos
   (`PHYSICS.fixedStep = 1/120 s`) mientras el render recibe `alpha` para interpolar entre los
   dos últimos estados de simulación (evita el _stutter_ con pantallas de alta frecuencia).
@@ -238,10 +251,42 @@ cuando hay contenedor: las sesiones _headless_ avanzan paso a paso en las prueba
 targets del compositor y fuerza la pérdida del contexto WebGL; el ciclo montaje/desmontaje/
 remontaje de `StrictMode` está cubierto por pruebas.
 
+## Audio procedural
+
+Sin ficheros de sonido: todo es **WebAudio** generado en el navegador, dividido en una parte
+pura (testable en Node) y unos adaptadores que sólo tocan el DOM cuando suenan.
+
+- **Música por semilla**: una semilla decide la canción (progresión de acordes, groove rítmico,
+  rotación del ciclo y carácter del arpegio). Misma semilla ⇒ misma canción, siempre. El sistema
+  tonal es **La mixolidio** con melodía pentatónica mayor, tempo 84–120 BPM y tríadas diatónicas,
+  así que cualquier semilla suena consonante.
+- **Semillas curadas por nivel**: `npm run curate` puntúa 4000 semillas (variedad melódica,
+  movimiento y anti-repetición, en `songScore`) y elige las de `LEVEL_SONG_SEEDS`
+  (`[11, 16, 18, 37]`, las cuatro con nota 100 y estilos distintos) más `MENU_SONG_SEED`. Cada
+  nivel de la campaña suena como una canción propia y el menú tiene su propia sintonía.
+- **Adaptativa**: `Game` calcula por frame unas señales normalizadas (vidas restantes, avance de
+  campaña, muro restante y combo) y las entrega como `AudioSignals`; el `IntensityTracker` las
+  suaviza (sube rápido ~1,5 s, baja lento ~4 s) y esa intensidad abre capas —pad, bajo, arpegio,
+  percusión—, cambia el tempo y el brillo del filtro y la densidad de notas. La intensidad nunca
+  cambia las notas: sólo decide qué suena.
+- **Efectos por evento**: el `AudioDirector` escucha el mismo bus que el render y la UI
+  (`brickDamaged`, `brickDestroyed` con cadena/explosivo, `powerUpCollected`, `laserFired`,
+  `wallHit`, `lifeLost`, `levelCompleted`, `gameOver`) y sintetiza cada blip con osciladores.
+- **Autoplay y ciclo de vida**: el `AudioContext` no se crea hasta el primer gesto del usuario
+  (política de autoplay); la pestaña oculta lo suspende de verdad (cero CPU) y la pausa o la guía
+  hacen fade-out y reanudan con suavidad. El botón **SONIDO: ON/OFF** del menú y la pausa
+  silencia música y efectos y recuerda la elección en `localStorage` (`arkanoid.audio.v1`,
+  degradando a activado en modo privado).
+- **Frontera limpia**: el motor nunca conoce WebAudio. `Game` sólo llama a
+  `audio.update(dt, signals)` cada frame y el bridge inyecta el `AudioDirector`; la interfaz
+  `GameAudio` (`src/core/audio.ts`) juega el mismo papel que `GameRenderer` para three.js.
+- **Ajuste**: sin números mágicos; tónica, escala, tempo, umbrales de capas, mezcla y semillas
+  viven en `src/audio/musicConstants.ts`.
+
 ## Pruebas y cobertura
 
 ```bash
-npm test              # 236 pruebas en 25 archivos
+npm test              # 273 pruebas en 28 archivos
 npm run test:coverage # informe de cobertura + umbrales por capa
 ```
 
@@ -257,7 +302,11 @@ suspensión con la pestaña oculta), el `ErrorBoundary` y los componentes de UI.
 móvil/táctil se prueba por separado: detección de dispositivo con nivel de confianza, elección
 y persistencia del esquema de controles, `ViewportManager` (resize, orientación y
 `visualViewport`), `TouchInput` y los controles en pantalla con multitáctil real (joystick +
-botones, `pointercancel`) y su pantalla de selección.
+botones, `pointercancel`) y su pantalla de selección. El **audio** se prueba por su parte pura e
+ineludible: RNG determinista, patrones (notas siempre en la escala, arpegio pentatónico,
+progresión diatónica, nota de calidad acotada), mapeo de intensidad, suavizado del
+`IntensityTracker`, preferencia persistida **y el contrato motor↔audio** (el motor entrega
+`AudioSignals` derivadas del mundo y refleja el mute en el snapshot).
 
 Cobertura medida (`npm run test:coverage`):
 
@@ -266,22 +315,26 @@ Cobertura medida (`npm run test:coverage`):
 | `src/utils`    | 100 %      | 97 %  |
 | `src/entities` | 98.5 %     | 100 % |
 | `src/levels`   | 98 %       | 97 %  |
+| `src/audio`    | 99.5 %     | 76 %  |
 | `src/platform` | 98 %       | 91 %  |
 | `src/systems`  | 98 %       | 89 %  |
 | `src/ui`       | 94 %       | 91 %  |
-| `src/bridge`   | 95 %       | 67 %  |
+| `src/bridge`   | 96 %       | 77 %  |
 | `src/core`     | 93 %       | 81 %  |
 
 Los umbrales de `vitest.config.ts` son suelos por capa, medidos contra la suite actual. La capa
 `src/rendering` se **informa pero no se exige**: necesita una GPU real, y se verifica con el
-_smoke test_ manual descrito en la sección de producción.
+_smoke test_ manual descrito en la sección de producción. En `src/audio` se mide sólo la parte
+pura: los adaptadores WebAudio (`MusicEngine`, `MusicDirector`, `SoundFX`, `AudioDirector`)
+necesitan un `AudioContext` real, así que quedan fuera del suelo y se verifican con el mismo
+_smoke test_ manual.
 
 ## Posibles mejoras futuras
 
 - **Compilador de React**: `@vitejs/plugin-react@6` ya expone la opción `compiler`, pero está
   marcada como `@experimental` y requiere `oxc-transform-react`; se activará cuando la
   integración se estabilice (memoización automática de los componentes de UI).
-- **Audio**: motor WebAudio reaccionando a los mismos eventos del bus, con música por nivel.
+- **Audio**: reverb por convolución y más familias tonales/grooves para nuevas canciones.
 - **Campaña**: más niveles, jefes, bloques móviles/rotatorios y una niebla que sube.
 - **Progresión**: guardar niveles desbloqueados, récords por nivel y monedas de tablero.
 - **Accesibilidad**: remapeo de teclas, escala de UI y modo daltónico para los ladrillos.
@@ -307,8 +360,9 @@ npm run preview # sirve dist/ tal cual se subirá
   S3, Nginx…).
 - El bundle se divide en `assets/three-*.js` (motor 3D, cacheable entre despliegues) y
   `assets/index-*.js` (app). Las fuentes se sirven como `woff2` con `font-display: swap`.
-- No hay variables de entorno ni backend: el único estado persistente es el récord en
-  `localStorage` (`arkanoid.record.v1`), que falla de forma silenciosa en modo privado.
+- No hay variables de entorno ni backend: el único estado persistente vive en `localStorage` —
+  el récord (`arkanoid.record.v1`), el esquema de controles (`arkanoid.controls.v1`) y la
+  preferencia de audio (`arkanoid.audio.v1`) — y todas fallan de forma silenciosa en modo privado.
 
 ### Robustez en producción
 
@@ -323,6 +377,7 @@ npm run preview # sirve dist/ tal cual se subirá
 | `prefers-reduced-motion`                              | Sin screen shake, confeti reducido y animaciones CSS desactivadas                                                             |
 | JavaScript desactivado                                | Mensaje `<noscript>` con instrucciones                                                                                        |
 | Móvil                                                 | `touch-action: none`, sin selección accidental, sin menú contextual al mantener pulsado y sin retardo de doble toque          |
+| Audio bloqueado por el navegador (autoplay)           | El `AudioContext` no se crea ni reanuda fuera de un gesto del usuario; el juego sigue jugable y en silencio                   |
 
 ### Observabilidad
 
