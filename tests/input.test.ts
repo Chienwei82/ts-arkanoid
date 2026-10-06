@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { InputManager } from '../src/systems/InputManager'
+import { TouchInput } from '../src/systems/TouchInput'
 
 interface Harness {
   readonly manager: InputManager
@@ -178,6 +179,48 @@ describe('InputManager', () => {
     expect(frame.launch).toBe(false)
     expect(hidden).not.toHaveBeenCalled()
 
+    manager.dispose()
+  })
+})
+
+describe('InputManager with a touch source', () => {
+  it('folds on-screen controls into the same frame as the keyboard', () => {
+    const touch = new TouchInput()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const manager = new InputManager(host, null, vi.fn<() => void>(), touch)
+    manager.attach()
+
+    window.dispatchEvent(key('keydown', 'ArrowLeft'))
+    touch.setAxis(1)
+    touch.press('launch')
+    touch.press('togglePause')
+
+    const frame = manager.takeFrame()
+    expect(frame.axis).toBe(0)
+    expect(frame.launch).toBe(true)
+    expect(frame.start).toBe(true)
+    expect(frame.fire).toBe(true)
+    expect(frame.togglePause).toBe(true)
+
+    manager.dispose()
+  })
+
+  it('drops touch state together with the keys on focus loss', () => {
+    const touch = new TouchInput()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const manager = new InputManager(host, null, vi.fn<() => void>(), touch)
+    manager.attach()
+
+    touch.setAxis(1)
+    touch.press('launch')
+    window.dispatchEvent(new Event('blur'))
+
+    const frame = manager.takeFrame()
+    expect(frame.axis).toBe(0)
+    expect(frame.fire).toBe(false)
+    expect(frame.launch).toBe(false)
     manager.dispose()
   })
 })

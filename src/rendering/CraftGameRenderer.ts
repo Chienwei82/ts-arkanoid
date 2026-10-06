@@ -9,11 +9,12 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three'
-import { FIELD, RENDER } from '../config/gameConfig'
+import { FIELD, RENDER, type QualityConfig } from '../config/gameConfig'
 import { PALETTE } from '../config/palette'
 import type { GameBus, Unsubscribe } from '../core/EventBus'
 import { GAME_CANVAS_CLASS, type GameRenderer } from '../core/renderer'
 import type { GameStatus } from '../core/types'
+import { ViewportManager, type ViewportSize } from '../platform/ViewportManager'
 import type { World } from '../systems/World'
 import type { Brick } from '../entities/types'
 import { DEG2RAD, clamp, hexToInt, lerp } from '../utils/math'
@@ -85,7 +86,7 @@ export class CraftGameRenderer implements GameRenderer {
   private readonly plane = new Plane(new Vector3(0, 0, 1), 0)
   private readonly pointer = new Vector2()
   private readonly hitPoint = new Vector3()
-  private readonly observer: ResizeObserver
+  private readonly viewport: ViewportManager
   private readonly unsubscribers: Unsubscribe[]
   private readonly motionQuery: MediaQueryList | null
 
@@ -102,11 +103,14 @@ export class CraftGameRenderer implements GameRenderer {
   private confettiScale = 1
   private disposed = false
 
-  constructor(container: HTMLElement, bus: GameBus) {
+  constructor(container: HTMLElement, bus: GameBus, quality: QualityConfig) {
     this.container = container
     this.bus = bus
 
-    this.renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    this.renderer = new WebGLRenderer({
+      antialias: quality.antialias,
+      powerPreference: quality.antialias ? 'high-performance' : 'default',
+    })
     this.renderer.toneMapping = ACESFilmicToneMapping
     this.renderer.toneMappingExposure = EXPOSURE
     this.renderer.outputColorSpace = SRGBColorSpace
@@ -130,7 +134,7 @@ export class CraftGameRenderer implements GameRenderer {
       this.trail.object,
     )
 
-    this.postFX = new PostFX(this.renderer, this.scene, this.camera)
+    this.postFX = new PostFX(this.renderer, this.scene, this.camera, quality.bloom)
     this.unsubscribers = this.wireEvents()
 
     this.canvas.addEventListener('webglcontextlost', this.handleContextLost)
@@ -139,9 +143,10 @@ export class CraftGameRenderer implements GameRenderer {
     this.applyMotionPreference()
     this.motionQuery?.addEventListener('change', this.applyMotionPreference)
 
-    this.observer = new ResizeObserver(() => this.resize())
-    this.observer.observe(container)
-    this.resize()
+    this.viewport = new ViewportManager(container, this.applyViewport, {
+      maxPixelRatio: quality.maxPixelRatio,
+    })
+    this.viewport.attach()
   }
 
   syncWorld(world: World, alpha: number): void {
@@ -205,7 +210,7 @@ export class CraftGameRenderer implements GameRenderer {
     this.disposed = true
     for (const unsubscribe of this.unsubscribers) unsubscribe()
     this.unsubscribers.length = 0
-    this.observer.disconnect()
+    this.viewport.dispose()
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost)
     this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored)
     this.motionQuery?.removeEventListener('change', this.applyMotionPreference)
@@ -327,7 +332,7 @@ export class CraftGameRenderer implements GameRenderer {
 
   private readonly handleContextRestored = (): void => {
     this.contextLost = false
-    this.resize()
+    this.viewport.notify()
   }
 
   private burstOnPaddle(colour: number): void {
@@ -381,19 +386,16 @@ export class CraftGameRenderer implements GameRenderer {
     this.confetti.shower(FIELD.halfWidth, FIELD.halfHeight - 2, CELEBRATION_COLOURS, count)
   }
 
-  private resize(): void {
-    const width = Math.max(1, this.container.clientWidth)
-    const height = Math.max(1, this.container.clientHeight)
-    const pixelRatio = Math.min(window.devicePixelRatio, RENDER.maxPixelRatio)
+  /** Sizes the canvas and reframes the camera for the measured viewport. */
+  private readonly applyViewport = (size: ViewportSize): void => {
+    this.renderer.setPixelRatio(size.pixelRatio)
+    this.renderer.setSize(size.width, size.height, true)
 
-    this.renderer.setPixelRatio(pixelRatio)
-    this.renderer.setSize(width, height, true)
-
-    const aspect = width / height
+    const aspect = size.width / size.height
     this.camera.aspect = aspect
     this.baseDistance = this.fitDistance(aspect)
     this.camera.updateProjectionMatrix()
-    this.postFX.setSize(width, height, pixelRatio)
+    this.postFX.setSize(size.width, size.height, size.pixelRatio)
   }
 
   /** Camera distance that frames the field with a diorama margin on both axes. */

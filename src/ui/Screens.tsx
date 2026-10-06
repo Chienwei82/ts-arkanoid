@@ -1,10 +1,19 @@
 import type { GameFacade } from '../bridge'
 import type { HudState } from '../core/types'
+import type { ControlScheme } from '../platform/ControlScheme'
+import { ControlSchemePicker } from './ControlSchemePicker'
 import { HelpScreen } from './HelpScreen'
 import { PaperButton } from './PaperButton'
 import { formatScore } from './format'
 
 interface ScreensProps {
+  readonly hud: HudState
+  readonly session: GameFacade
+  readonly scheme: ControlScheme
+  readonly onSchemeChange: (scheme: ControlScheme) => void
+}
+
+interface ErrorScreenProps {
   readonly hud: HudState
   readonly session: GameFacade
 }
@@ -17,7 +26,7 @@ const CONTROLS: readonly string[] = [
 ]
 
 /** Full-screen paper panel for a fatal engine/renderer failure. */
-export const EngineErrorScreen = ({ hud, session }: ScreensProps) => {
+export const EngineErrorScreen = ({ hud, session }: ErrorScreenProps) => {
   if (hud.error === null) return null
   return (
     <div className="screens">
@@ -33,7 +42,7 @@ export const EngineErrorScreen = ({ hud, session }: ScreensProps) => {
 }
 
 /** Full-screen paper panels for every non-playing game state and the guide. */
-export const Screens = ({ hud, session }: ScreensProps) => {
+export const Screens = ({ hud, session, scheme, onSchemeChange }: ScreensProps) => {
   if (hud.error !== null) return <EngineErrorScreen hud={hud} session={session} />
   if (hud.helpVisible) return <HelpScreen hud={hud} session={session} />
   if (hud.status === 'playing') return null
@@ -54,6 +63,10 @@ export const Screens = ({ hud, session }: ScreensProps) => {
                 <li key={line}>{line}</li>
               ))}
             </ul>
+            <div className="panel__settings">
+              <span className="panel__settings-label">Controles</span>
+              <ControlSchemePicker scheme={scheme} onSelect={onSchemeChange} compact />
+            </div>
           </>
         )}
 
@@ -70,6 +83,10 @@ export const Screens = ({ hud, session }: ScreensProps) => {
                 tone="ghost"
                 onClick={() => session.quitToMenu()}
               />
+            </div>
+            <div className="panel__settings">
+              <span className="panel__settings-label">Controles</span>
+              <ControlSchemePicker scheme={scheme} onSelect={onSchemeChange} compact />
             </div>
           </>
         )}

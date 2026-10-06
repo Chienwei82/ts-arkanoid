@@ -8,6 +8,7 @@ import { LaserSystem } from '../systems/LaserSystem'
 import { PhysicsSystem } from '../systems/PhysicsSystem'
 import { PowerUpSystem } from '../systems/PowerUpSystem'
 import { ScoringSystem } from '../systems/ScoringSystem'
+import { type TouchInput } from '../systems/TouchInput'
 import { World } from '../systems/World'
 import type { GameEventMap } from './events'
 import { EventBus, type GameBus } from './EventBus'
@@ -28,6 +29,8 @@ export interface GameOptions {
   readonly storage?: RecordStorage
   readonly bus?: GameBus
   readonly levels?: readonly LevelDefinition[]
+  /** Shared with the on-screen touch controls; defaults to a private one. */
+  readonly touchInput?: TouchInput
 }
 
 /**
@@ -85,7 +88,7 @@ export class Game implements GameContext {
       : null
     this.input =
       container !== null
-        ? new InputManager(container, pointerMapper, () => this.requestPause())
+        ? new InputManager(container, pointerMapper, () => this.requestPause(), options.touchInput)
         : null
 
     this.loadLevel(0)

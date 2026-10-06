@@ -17,13 +17,15 @@ export interface LoopHandlers {
  * Two safety valves keep a stalled or broken frame from ruining the run: the
  * per-frame step budget caps catch-up work after a hitch, and handler failures
  * stop the loop through onError instead of leaving a dead rAF chain behind.
+ * A third one suspends rendering entirely while the tab is hidden, so a game in
+ * the background burns neither GPU nor battery.
  */
 export class GameLoop {
   private readonly handlers: LoopHandlers
   private readonly step: number
   private readonly maxSteps: number
   private readonly tick = (now: number): void => {
-    if (!this.running) return
+    if (!this.running || this.suspended) return
     const frameDelta = Math.min((now - this.lastTime) / 1000, this.maxDelta)
     this.lastTime = now
     this.accumulator += frameDelta
@@ -50,8 +52,14 @@ export class GameLoop {
   private readonly maxDelta: number
   private rafId = 0
   private running = false
+  private suspended = false
   private lastTime = 0
   private accumulator = 0
+
+  private readonly handleVisibility = (): void => {
+    if (globalThis.document?.visibilityState === 'hidden') this.suspend()
+    else this.resume()
+  }
 
   constructor(handlers: LoopHandlers) {
     this.handlers = handlers
@@ -65,15 +73,36 @@ export class GameLoop {
     this.running = true
     this.lastTime = performance.now()
     this.accumulator = 0
+    globalThis.document?.addEventListener('visibilitychange', this.handleVisibility)
     this.rafId = requestAnimationFrame(this.tick)
   }
 
   stop(): void {
     this.running = false
+    this.suspended = false
+    globalThis.document?.removeEventListener('visibilitychange', this.handleVisibility)
     // Only cancel a frame this loop actually scheduled, and stay safe on hosts
     // without a browser scheduler (headless tests).
     if (this.rafId !== 0) globalThis.cancelAnimationFrame?.(this.rafId)
     this.rafId = 0
+  }
+
+  /** Freezes the frame chain while the tab is hidden; resume re-arms it. */
+  private suspend(): void {
+    if (!this.running || this.suspended) return
+    this.suspended = true
+    if (this.rafId !== 0) globalThis.cancelAnimationFrame?.(this.rafId)
+    this.rafId = 0
+  }
+
+  private resume(): void {
+    if (!this.running || !this.suspended) return
+    this.suspended = false
+    // The wall clock kept moving while hidden: restart cleanly instead of
+    // handing the accumulated gap to the simulation.
+    this.lastTime = performance.now()
+    this.accumulator = 0
+    this.rafId = requestAnimationFrame(this.tick)
   }
 
   get isRunning(): boolean {

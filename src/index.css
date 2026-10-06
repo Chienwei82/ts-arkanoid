@@ -9,7 +9,8 @@
 html,
 body,
 #root {
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
   margin: 0;
 }
 
@@ -20,6 +21,13 @@ body,
 body {
   overflow: hidden;
   overscroll-behavior: none;
+  /* A game surface owns every gesture: no page scroll, no double-tap or pinch
+     zoom and no text selection; UI panels re-enable panning/zoom per element. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
   /* Matches the sky gradient so there is no white flash before the canvas paints. */
   background: linear-gradient(180deg, #5fb8ff 0%, #b8e4ff 48%, #ffe9c2 100%);
 }

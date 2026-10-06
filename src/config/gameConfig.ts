@@ -118,3 +118,15 @@ export const RENDER = {
   levelIntro: { duration: 0.9, scaleFrom: 0.86, tilt: 0.05 },
   guide: { width: 0.7, alpha: 0.5 },
 } as const
+
+/**
+ * Rendering quality presets. Mobile devices get `low` (no antialias, no bloom
+ * and a tighter pixel-ratio cap) so the frame rate stays steady on phone GPUs;
+ * tablets and desktops render with `high`. Gameplay tuning is identical.
+ */
+export const QUALITY = {
+  high: { maxPixelRatio: RENDER.maxPixelRatio, antialias: true, bloom: true },
+  low: { maxPixelRatio: 1.5, antialias: false, bloom: false },
+} as const
+
+export type QualityConfig = (typeof QUALITY)[keyof typeof QUALITY]

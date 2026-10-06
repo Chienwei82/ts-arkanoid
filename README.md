@@ -87,8 +87,36 @@ un nombre mDNS (`mi-portatil.local`), añádelo a `server.allowedHosts`.
 | --------------------------------- | ------------------------------------ | ---------------------------- |
 | Mover la paleta                   | mover el puntero / arrastrar el dedo | `←` `→` o `A` `D`            |
 | Lanzar la bola                    | clic o toque                         | `ESPACIO` (mantener = láser) |
-| Pausa                             | —                                    | `ESC` o `P`                  |
+| Pausa                             | botón PAUSA (táctil)                 | `ESC` o `P`                  |
+| Guía de power-ups y bloques       | botón AYUDA (táctil)                 | `H`                          |
 | Confirmar (menú, siguiente nivel) | botones de la UI                     | `ESPACIO` / `ENTER`          |
+
+### Controles táctiles en pantalla
+
+En modo táctil se superponen al canvas un **joystick virtual** (abajo a la izquierda) y los
+botones **LANZAR** (lanza y, mantenido, dispara el láser), **PAUSA** y **AYUDA** (abajo a la
+derecha), con multitáctil real: se puede mover el joystick y mantener un botón a la vez
+(Pointer Events con `setPointerCapture` y manejo de `pointercancel`). Arrastrar un dedo por el
+tablero también mueve la paleta. Los widgets son HTML/CSS sobre el canvas, nunca parte de la
+escena three.js, y se ocultan en modo escritorio.
+
+El modo se decide automáticamente con la detección de dispositivo (`DeviceDetector`: puntero
+`coarse`/`hover`, `maxTouchPoints`, `userAgentData`/`userAgent` y tamaño de pantalla) y, cuando
+la detección no es fiable (portátil táctil, tableta con teclado, iPadOS disfrazado de macOS…),
+una pantalla de selección decide antes de arrancar la escena. La elección se guarda en
+`localStorage` (`arkanoid.controls.v1`) y se puede cambiar después desde el menú o la pausa.
+
+### Cómo probarlo en móvil
+
+- **Chrome DevTools**: `npm run dev`, abre la URL local, `F12` → modo dispositivo (Ctrl+Shift+M),
+  elige un perfil táctil (p. ej. Pixel 7) y prueba a rotar (retrato/paisaje) y con la barra de
+  direcciones colapsada. La vista _responsive_ permite forzar `pointer: coarse` y tamaños de
+  tableta para provocar la pantalla de selección.
+- **Dispositivo real**: el dev server escucha en todas las interfaces; abre la Network URL que
+  imprime Vite (o `npm run preview` para el build de producción) desde el móvil en la misma LAN.
+  En Android comprueba: la escena llena la pantalla al rotar, sin scroll ni zoom accidental,
+  multitáctil (joystick + botón a la vez) y que el juego se reanuda solo al volver de otra
+  pestaña.
 
 ## Estructura
 
@@ -98,13 +126,15 @@ src/
   core/        GameLoop (timestep fijo), Game (orquestador), EventBus, states/ (State pattern)
   entities/    tipos + BrickBehavior y PowerUpEffect (Strategy) + factories (Factory)
   systems/     World, PhysicsSystem, CollisionSystem, ScoringSystem, PowerUpSystem,
-               LaserSystem, comandos (Command) e input (InputManager/InputDispatcher)
+               LaserSystem, comandos (Command) e input (InputManager/InputDispatcher/TouchInput)
+  platform/    entorno navegador: ViewportManager (resize/orientación/visualViewport),
+               DeviceDetector (con nivel de confianza) y ControlScheme (elección persistida)
   levels/      definiciones de nivel como datos + validación y cálculo de la cuadrícula
   rendering/   escena papercraft: SceneBuilder, BrickRenderer, ActorRenderer,
                ConfettiSystem, BallTrail, ExplosionWaves, ScreenShake, PostFX,
                texturas generadas por canvas y CraftGameRenderer (implementa GameRenderer)
   bridge/      GameFacade + GameSession (store externo que consume React)
-  ui/          componentes React (HUD, paneles de menú/pausa/nivel/fin) y su CSS
+  ui/          componentes React (HUD, paneles, controles táctiles) y su CSS
 tests/         pruebas unitarias de física, colisiones, puntuación, estados, niveles,
                power-ups, pool, puente React y UI
 ```
@@ -119,7 +149,9 @@ ui/ (React) ──► bridge/ ──► core/ ──► systems/ ──► entit
 ```
 
 `rendering/` es la única capa que importa three.js y `ui/` la única que importa React; una
-regla de ESLint (`no-restricted-imports`) impide romper esa frontera por accidente.
+regla de ESLint (`no-restricted-imports`) impide romper esa frontera por accidente y aplica
+también a `platform/` (servicios del navegador: viewport, detección de dispositivo y esquema de
+controles), que tampoco conoce three ni React.
 
 ## Arquitectura y patrones
 
@@ -182,8 +214,14 @@ niveles (`IGNICIÓN`, `FORTÍN`, `LABERINTO`, `NÚCLEO`).
   asignaciones ni RNG en el bucle.
 - Post-proceso: `RenderPass` → `UnrealBloomPass` (umbral alto, sólo altas luces) → viñeta +
   grano de papel → `OutputPass` (tone mapping ACES y conversión de color).
-- Canvas responsivo: `ResizeObserver` + `devicePixelRatio` limitado (`RENDER.maxPixelRatio = 2`),
-  cámara reencuadrada para mantener el tablero con margen tipo diorama.
+- Canvas responsivo: `ViewportManager` (`platform/`) mide el host con `ResizeObserver` y
+  escucha `resize`/`orientationchange`/`visualViewport`; el `devicePixelRatio` queda limitado
+  (`QUALITY.high.maxPixelRatio = 2`, `1.5` en el preset móvil) y la cámara se reencuadra para
+  mantener el tablero con margen tipo diorama. El layout usa unidades `dvh` y safe areas para
+  que la barra de direcciones de Android no recorte la escena.
+- Calidad reducida en móvil (`QUALITY.low`): sin antialias ni bloom y con pixel ratio más
+  ajustado. El render se detiene mientras la pestaña está oculta (`GameLoop` se suspende con
+  `visibilitychange`) y el motor se auto-pausa al perder el foco.
 - Transiciones: al cambiar de nivel o empezar partida el tablero entra con escala/tilt y la
   cámara retrocede brevemente; al superar un nivel cae confeti desde arriba.
 - Sin números mágicos: todo el ajuste vive en `src/config/gameConfig.ts` y `palette.ts`.
@@ -196,14 +234,14 @@ consumen `useSyncExternalStore`, así que React sólo se vuelve a renderizar cua
 cambia y **nunca** dentro del bucle de render. `attach` arranca el `requestAnimationFrame` sólo
 cuando hay contenedor: las sesiones _headless_ avanzan paso a paso en las pruebas.
 
-`dispose()` libera geometrías, materiales, texturas, listeners, el `ResizeObserver`, los render
+`dispose()` libera geometrías, materiales, texturas, listeners, el `ViewportManager`, los render
 targets del compositor y fuerza la pérdida del contexto WebGL; el ciclo montaje/desmontaje/
 remontaje de `StrictMode` está cubierto por pruebas.
 
 ## Pruebas y cobertura
 
 ```bash
-npm test              # 184 pruebas en 18 archivos
+npm test              # 236 pruebas en 25 archivos
 npm run test:coverage # informe de cobertura + umbrales por capa
 ```
 
@@ -214,8 +252,12 @@ puntuación (combos, multiplicador, récord persistido, `isRecord`), transicione
 (incluidos fin de partida y campaña completa), validación y factoría de niveles, efectos y
 duraciones de power-ups, agotamiento de pools, comandos e input (teclado, puntero, táctil,
 visibilidad y foco), persistencia tolerante a fallos, el **contrato motor↔renderer** con un
-doble que graba llamadas, el bucle con un planificador de frames determinista, el `ErrorBoundary`
-y los componentes de UI.
+doble que graba llamadas, el bucle con un planificador de frames determinista (incluida la
+suspensión con la pestaña oculta), el `ErrorBoundary` y los componentes de UI. La parte
+móvil/táctil se prueba por separado: detección de dispositivo con nivel de confianza, elección
+y persistencia del esquema de controles, `ViewportManager` (resize, orientación y
+`visualViewport`), `TouchInput` y los controles en pantalla con multitáctil real (joystick +
+botones, `pointercancel`) y su pantalla de selección.
 
 Cobertura medida (`npm run test:coverage`):
 
@@ -224,10 +266,11 @@ Cobertura medida (`npm run test:coverage`):
 | `src/utils`    | 100 %      | 97 %  |
 | `src/entities` | 98.5 %     | 100 % |
 | `src/levels`   | 98 %       | 97 %  |
-| `src/systems`  | 97.5 %     | 89 %  |
-| `src/ui`       | 96 %       | 97 %  |
-| `src/bridge`   | 95 %       | 63 %  |
-| `src/core`     | 93 %       | 79 %  |
+| `src/platform` | 98 %       | 91 %  |
+| `src/systems`  | 98 %       | 89 %  |
+| `src/ui`       | 94 %       | 91 %  |
+| `src/bridge`   | 95 %       | 67 %  |
+| `src/core`     | 93 %       | 81 %  |
 
 Los umbrales de `vitest.config.ts` son suelos por capa, medidos contra la suite actual. La capa
 `src/rendering` se **informa pero no se exige**: necesita una GPU real, y se verifica con el
