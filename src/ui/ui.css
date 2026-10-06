@@ -215,6 +215,9 @@
 .chip[data-type='life'] {
   --tone: var(--pink);
 }
+.chip[data-type='powerBall'] {
+  --tone: var(--teal);
+}
 
 @keyframes score-pop {
   from {

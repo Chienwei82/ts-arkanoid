@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { createCloudGeometry, createHillGeometry } from '../src/rendering/props'
+import type { BufferGeometry } from 'three'
+import {
+  createAcUnitGeometry,
+  createAntennaGeometry,
+  createCloudGeometry,
+  createServicePipeGeometry,
+  createWaterTankGeometry,
+} from '../src/rendering/props'
 
-/**
- * Guard for the only rendering assumption that needs no GPU: merging the paper
- * prop geometries into a single drawable must actually produce attributes.
- */
+/** A merged prop must be one drawable: positions, normals and UVs, all present. */
+const expectDrawable = (geometry: BufferGeometry): void => {
+  const position = geometry.getAttribute('position')
+  expect(position.count).toBeGreaterThan(0)
+  expect(geometry.getAttribute('normal')).toBeDefined()
+  expect(geometry.getAttribute('uv')).toBeDefined()
+  geometry.dispose()
+}
+
 describe('paper prop geometry', () => {
   it('merges the cloud puffs into one geometry with normals', () => {
     const cloud = createCloudGeometry()
@@ -16,15 +28,25 @@ describe('paper prop geometry', () => {
     cloud.dispose()
   })
 
-  it('builds squashed hill domes around their local origin', () => {
-    const hill = createHillGeometry()
-    hill.computeBoundingBox()
+  it('merges every building prop into one drawable geometry', () => {
+    const builders = [
+      createWaterTankGeometry,
+      createAntennaGeometry,
+      createAcUnitGeometry,
+      createServicePipeGeometry,
+    ]
+    for (const build of builders) expectDrawable(build())
+  })
 
-    const box = hill.boundingBox
-    expect(box).not.toBeNull()
-    if (box === null) return
-    expect(box.max.y).toBeGreaterThan(box.min.y)
-    expect(box.max.x - box.min.x).toBeGreaterThan(box.max.y - box.min.y)
-    hill.dispose()
+  it('keeps the rooftop props taller than wide', () => {
+    for (const build of [createWaterTankGeometry, createAntennaGeometry]) {
+      const geometry = build()
+      geometry.computeBoundingBox()
+      const box = geometry.boundingBox
+      expect(box).not.toBeNull()
+      if (box === null) continue
+      expect(box.max.y - box.min.y).toBeGreaterThan(box.max.x - box.min.x)
+      geometry.dispose()
+    }
   })
 })

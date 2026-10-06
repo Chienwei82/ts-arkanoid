@@ -64,6 +64,16 @@ export const POWER_UP_HELP: readonly PowerUpHelp[] = [
     name: POWER_UP_LABEL.life,
     detail: `Suma una vida al instante (máximo ${SCORING.maxLives}).`,
   },
+  {
+    type: 'powerBall',
+    glyph: POWER_UP_GLYPH.powerBall,
+    name: POWER_UP_LABEL.powerBall,
+    detail:
+      `Cambia tus bolas por una especial durante ${formatSeconds(
+        POWER_UPS.durations.powerBall,
+      )}: ` +
+      'de fuego (prende a los vecinos), pesada (revienta hasta el metal) o bomba (explota en cadena).',
+  },
 ]
 
 export const BRICK_HELP: readonly BrickHelp[] = [

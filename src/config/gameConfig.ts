@@ -57,8 +57,8 @@ export const POWER_UPS = {
   poolSize: 10,
   /** Default drop rate for levels that do not override it. */
   dropChance: 0.2,
-  weights: { wide: 25, multi: 18, slow: 14, fast: 10, laser: 23, life: 10 } as const,
-  durations: { wide: 14, slow: 12, fast: 10, laser: 9 } as const,
+  weights: { wide: 22, multi: 16, slow: 12, fast: 9, laser: 20, powerBall: 12, life: 9 } as const,
+  durations: { wide: 14, slow: 12, fast: 10, laser: 9, powerBall: 12 } as const,
   slowFactor: 0.7,
   fastFactor: 1.45,
   laserBoltSpeed: 62,
@@ -117,6 +117,32 @@ export const RENDER = {
   card: { size: 3.6, bob: 0.55, spin: 1.3 },
   levelIntro: { duration: 0.9, scaleFrom: 0.86, tilt: 0.05 },
   guide: { width: 0.7, alpha: 0.5 },
+  /**
+   * Paddle "dress-up" for the running power-up: an additive aura behind the bar,
+   * a sticker with the power-up icon on its face and an emissive body tint.
+   */
+  paddleCue: {
+    plateSize: 2.05,
+    plateInset: 0.05,
+    aura: { halfWidthScale: 1.42, height: 6.2, z: -0.6, alpha: 0.85 },
+    glow: 0.5,
+    pulse: 0.07,
+    pulseSpeed: 5,
+  },
+  /**
+   * Urban "building under construction" diorama: a tall facade with a grid of
+   * windows (randomly lit), rooftop clutter, scaffolding, service pipes and a
+   * ground slab behind/around the play board.
+   */
+  building: {
+    facade: { depth: -15, widthFactor: 3.6, topMargin: 3, bottomMargin: 6, thickness: 2.4 },
+    window: { size: 2.6, gap: 0.7, litChance: 0.5, flickerChance: 0.05, flickerInterval: 0.6 },
+    roof: { tankScale: 1.1, antennaScale: 1.5 },
+    ground: { depth: -4, top: -FIELD.halfHeight - 5.5, height: 6, depthSize: 14 },
+    scaffold: { poles: 6, planks: 6, x: FIELD.halfWidth * 1.26, z: -7 },
+    ac: { count: 6, depth: -12.4 },
+    pipes: { count: 5, depth: -13 },
+  },
 } as const
 
 /**

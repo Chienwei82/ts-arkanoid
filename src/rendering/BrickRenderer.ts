@@ -13,6 +13,7 @@ import {
 } from 'three'
 import { BRICK, RENDER } from '../config/gameConfig'
 import type { Brick } from '../entities/types'
+import { brickMaterialFor, type BrickMaterial } from './brickMaterial'
 import { createInkMaterial, createPaperMaterial, createTintablePaperMaterial } from './materials'
 import type { CraftTextures } from './textures'
 
@@ -41,16 +42,32 @@ interface BrickVisual {
   hitsLeft: number
 }
 
+/** One material family: its three stacked instanced layers plus its textures. */
+interface MaterialGroup {
+  readonly layers: InstancedMesh[]
+  readonly geometry: BoxGeometry
+  readonly ink: MeshBasicMaterial
+  readonly paper: MeshLambertMaterial
+  readonly body: MeshLambertMaterial
+}
+
+interface BrickSize {
+  readonly width: number
+  readonly height: number
+}
+
 /**
  * Renders the whole brick field with three InstancedMesh layers - ink casing,
- * paper frame and tinted body - which keeps a 90-brick level at three draw calls.
- * Hit pulses and the shatter animation rewrite only the instances that are
- * actually moving, so a calm frame costs nothing.
+ * paper frame and tinted body - per material family present in the level (wood
+ * crates, sheet metal, cast concrete, hazard crates). Each family keeps its own
+ * texture, so a level still costs a handful of draw calls while reading as
+ * different materials. Hit pulses and the shatter animation rewrite only the
+ * instances that are actually moving, so a calm frame costs nothing.
  */
 export class BrickRenderer {
   private readonly root = new Group()
   private readonly textures: CraftTextures
-  private readonly layers: InstancedMesh[] = []
+  private readonly groups: MaterialGroup[] = []
   private readonly matrices = [new Matrix4(), new Matrix4(), new Matrix4()]
   private readonly position = new Vector3()
   private readonly rotation = new Euler()
@@ -58,12 +75,11 @@ export class BrickRenderer {
   private readonly scale = new Vector3()
   private readonly colour = new Color()
 
-  private geometry: BoxGeometry | null = null
-  private inkMaterial: MeshBasicMaterial | null = null
-  private paperMaterial: MeshLambertMaterial | null = null
-  private bodyMaterial: MeshLambertMaterial | null = null
   private bricks: readonly Brick[] = []
   private visuals: BrickVisual[] = []
+  /** Per-brick lookup into `groups` and the instance slot inside that group. */
+  private groupIndex = new Int32Array(0)
+  private slotIndex = new Int32Array(0)
   private colourDirty = false
 
   constructor(textures: CraftTextures) {
@@ -74,9 +90,9 @@ export class BrickRenderer {
     return this.root
   }
 
-  /** Rebuilds the instanced layers for a new level layout. */
+  /** Rebuilds the instanced layers for a new level layout, bucketed by material. */
   setBricks(bricks: readonly Brick[]): void {
-    this.disposeLayers()
+    this.disposeGroups()
     this.bricks = bricks
     this.visuals = bricks.map((brick) => ({
       hit: 0,
@@ -84,25 +100,29 @@ export class BrickRenderer {
       alive: brick.alive,
       hitsLeft: brick.hitsLeft,
     }))
+    this.groupIndex = new Int32Array(bricks.length)
+    this.slotIndex = new Int32Array(bricks.length)
     if (bricks.length === 0) return
 
     const sample = bricks[0]
-    this.geometry = new BoxGeometry(sample.halfWidth * 2, sample.halfHeight * 2, BRICK.depth)
-    this.inkMaterial = createInkMaterial()
-    this.paperMaterial = createPaperMaterial(this.textures.brickPaper)
-    this.bodyMaterial = createTintablePaperMaterial(this.textures.brickPaper)
+    const size: BrickSize = { width: sample.halfWidth * 2, height: sample.halfHeight * 2 }
 
-    const materials: readonly (MeshBasicMaterial | MeshLambertMaterial)[] = [
-      this.inkMaterial,
-      this.paperMaterial,
-      this.bodyMaterial,
-    ]
-    for (const material of materials) {
-      const layer = new InstancedMesh(this.geometry, material, bricks.length)
-      layer.frustumCulled = false
-      layer.instanceMatrix.setUsage(DynamicDrawUsage)
-      this.root.add(layer)
-      this.layers.push(layer)
+    const buckets = new Map<BrickMaterial, number[]>()
+    for (let index = 0; index < bricks.length; index += 1) {
+      const material = brickMaterialFor(bricks[index].type)
+      const bucket = buckets.get(material)
+      if (bucket === undefined) buckets.set(material, [index])
+      else bucket.push(index)
+    }
+
+    for (const [material, indices] of buckets) {
+      const groupIdx = this.groups.length
+      this.groups.push(this.createGroup(material, size, indices.length))
+      for (let slot = 0; slot < indices.length; slot += 1) {
+        const index = indices[slot]
+        this.groupIndex[index] = groupIdx
+        this.slotIndex[index] = slot
+      }
     }
 
     for (let index = 0; index < bricks.length; index += 1) {
@@ -176,10 +196,27 @@ export class BrickRenderer {
   }
 
   dispose(): void {
-    this.disposeLayers()
+    this.disposeGroups()
     this.bricks = []
     this.visuals = []
     this.root.clear()
+  }
+
+  private createGroup(material: BrickMaterial, size: BrickSize, count: number): MaterialGroup {
+    const geometry = new BoxGeometry(size.width, size.height, BRICK.depth)
+    const texture = this.textures.brickMaterials[material]
+    const ink = createInkMaterial()
+    const paper = createPaperMaterial(texture)
+    const body = createTintablePaperMaterial(texture)
+    const layers: InstancedMesh[] = []
+    for (const layerMaterial of [ink, paper, body]) {
+      const layer = new InstancedMesh(geometry, layerMaterial, count)
+      layer.frustumCulled = false
+      layer.instanceMatrix.setUsage(DynamicDrawUsage)
+      this.root.add(layer)
+      layers.push(layer)
+    }
+    return { layers, geometry, ink, paper, body }
   }
 
   private writeBrick(index: number, brick: Brick, visual: BrickVisual): void {
@@ -207,6 +244,8 @@ export class BrickRenderer {
       this.writeColour(index, brick, 0)
     }
 
+    const group = this.groups[this.groupIndex[index]]
+    const slot = this.slotIndex[index]
     this.rotation.set(0, 0, spin)
     this.quaternion.setFromEuler(this.rotation)
     this.position.set(brick.pos.x, brick.pos.y + rise, 0)
@@ -215,7 +254,7 @@ export class BrickRenderer {
       this.position.z = RENDER.depth.brick + config.z + pop
       this.scale.set(uniform * config.x, uniform * stretch * config.y, 1)
       this.matrices[layer].compose(this.position, this.quaternion, this.scale)
-      this.layers[layer].setMatrixAt(index, this.matrices[layer])
+      group.layers[layer].setMatrixAt(slot, this.matrices[layer])
     }
   }
 
@@ -226,7 +265,8 @@ export class BrickRenderer {
       this.colour.multiplyScalar(wear)
     }
     if (pulse > 0) this.colour.lerp(WHITE, RENDER.brickHit.flash * pulse)
-    this.layers[BODY_LAYER].setColorAt(index, this.colour)
+    const group = this.groups[this.groupIndex[index]]
+    group.layers[BODY_LAYER].setColorAt(this.slotIndex[index], this.colour)
     this.colourDirty = true
   }
 
@@ -234,36 +274,40 @@ export class BrickRenderer {
     this.quaternion.identity()
     this.position.set(0, 0, 0)
     this.scale.set(HIDDEN_SCALE, HIDDEN_SCALE, HIDDEN_SCALE)
+    const group = this.groups[this.groupIndex[index]]
+    const slot = this.slotIndex[index]
     for (let layer = 0; layer < LAYER_COUNT; layer += 1) {
       this.matrices[layer].compose(this.position, this.quaternion, this.scale)
-      this.layers[layer].setMatrixAt(index, this.matrices[layer])
+      group.layers[layer].setMatrixAt(slot, this.matrices[layer])
     }
   }
 
   private flushMatrices(): void {
-    for (const layer of this.layers) layer.instanceMatrix.needsUpdate = true
+    for (const group of this.groups) {
+      for (const layer of group.layers) layer.instanceMatrix.needsUpdate = true
+    }
   }
 
   private flushColours(): void {
     if (!this.colourDirty) return
     this.colourDirty = false
-    const colours = this.layers[BODY_LAYER].instanceColor
-    if (colours !== null) colours.needsUpdate = true
+    for (const group of this.groups) {
+      const colours = group.layers[BODY_LAYER].instanceColor
+      if (colours !== null) colours.needsUpdate = true
+    }
   }
 
-  private disposeLayers(): void {
-    for (const layer of this.layers) {
-      this.root.remove(layer)
-      layer.dispose()
+  private disposeGroups(): void {
+    for (const group of this.groups) {
+      for (const layer of group.layers) {
+        this.root.remove(layer)
+        layer.dispose()
+      }
+      group.geometry.dispose()
+      group.ink.dispose()
+      group.paper.dispose()
+      group.body.dispose()
     }
-    this.layers.length = 0
-    this.geometry?.dispose()
-    this.geometry = null
-    this.inkMaterial?.dispose()
-    this.paperMaterial?.dispose()
-    this.bodyMaterial?.dispose()
-    this.inkMaterial = null
-    this.paperMaterial = null
-    this.bodyMaterial = null
+    this.groups.length = 0
   }
 }

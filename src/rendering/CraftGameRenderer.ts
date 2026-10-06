@@ -26,6 +26,7 @@ import { ExplosionWaves } from './ExplosionWaves'
 import { PostFX } from './PostFX'
 import { SceneBuilder } from './SceneBuilder'
 import { ScreenShake } from './ScreenShake'
+import { primaryPowerUp } from './cues'
 import { CraftTextures } from './textures'
 
 const CONFETTI = { brick: 22, chain: 11, damaged: 5, pickup: 12, celebration: 40 }
@@ -268,6 +269,9 @@ export class CraftGameRenderer implements GameRenderer {
         this.addTrauma(TRAUMA.collect)
         this.burstOnPaddle(hexToInt(PALETTE.powerUp[type]))
       }),
+      this.bus.on('powerUpsChanged', ({ active }) => {
+        this.actors.setCueType(primaryPowerUp(active))
+      }),
       this.bus.on('lifeLost', () => {
         this.addTrauma(TRAUMA.life)
       }),
@@ -294,6 +298,8 @@ export class CraftGameRenderer implements GameRenderer {
         this.addTrauma(TRAUMA.gameOver)
         break
       case 'menu':
+        this.actors.setCueType(null)
+        break
       case 'paused':
         break
     }
@@ -316,6 +322,7 @@ export class CraftGameRenderer implements GameRenderer {
     const reduced = this.motionQuery?.matches === true
     this.shakeScale = reduced ? 0 : 1
     this.confettiScale = reduced ? CALM_CONFETTI_RATIO : 1
+    this.actors.setMotionScale(this.shakeScale)
     if (reduced) this.shake.reset()
   }
 
