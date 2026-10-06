@@ -326,8 +326,13 @@ npm run preview # sirve dist/ tal cual se subirá
 
 ### Observabilidad
 
-En desarrollo (`import.meta.env.DEV`) los fallos de motor y render se registran en consola
-con su fase (`update`/`render`). En producción solo se muestran al usuario, sin ruido.
+- En desarrollo (`import.meta.env.DEV`) los fallos de motor y render se registran en consola
+  con su fase (`update`/`render`). En producción solo se muestran al usuario, sin ruido.
+- **Vercel Analytics + Speed Insights**: `src/main.tsx` monta los componentes `<Analytics />`
+  y `<SpeedInsights />` (de `@vercel/analytics/react` y `@vercel/speed-insights/react`; al
+  ser una SPA de Vite se usan los entry points `/react`, no los `/next`). Recogen visitas y
+  métricas de rendimiento (Web Vitals) cuando el juego se despliega en Vercel; en cualquier
+  otro hosting los scripts no cargan datos y el juego funciona igual.
 
 ## Licencia
 
