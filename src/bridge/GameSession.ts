@@ -1,4 +1,5 @@
 import { SCORING } from '../config/gameConfig'
+import type { GameAudio } from '../core/audio'
 import type { Unsubscribe } from '../core/EventBus'
 import { Game } from '../core/Game'
 import { GAME_CANVAS_CLASS, RendererInitError } from '../core/renderer'
@@ -17,6 +18,11 @@ export interface GameSessionOptions {
   readonly levels?: readonly LevelDefinition[]
   /** Shared with the on-screen touch controls; defaults to a private one. */
   readonly touchInput?: TouchInput
+  /**
+   * Procedural audio system, created once by the composition root and reused
+   * across attach/detach cycles (its AudioContext must survive StrictMode).
+   */
+  readonly audio?: GameAudio
 }
 
 const UNSUPPORTED_WEBGL_MESSAGE =
@@ -37,12 +43,14 @@ export class GameSession implements GameFacade {
   private readonly listeners = new Set<() => void>()
   private readonly unsubscribers: Unsubscribe[] = []
   private game: Game | null = null
+  private readonly audio: GameAudio | null
   private snapshot: HudState
   private error: HudError | null = null
 
   constructor(options: GameSessionOptions = {}) {
     this.options = options
     this.touch = options.touchInput ?? new TouchInput()
+    this.audio = options.audio ?? null
     this.snapshot = this.idleSnapshot()
   }
 
@@ -73,6 +81,7 @@ export class GameSession implements GameFacade {
         storage: this.options.storage,
         levels: this.options.levels,
         touchInput: this.touch,
+        audio: this.audio ?? undefined,
       })
     } catch (cause) {
       // Renderer failures ("no WebGL at all": old browser, blocked context) get
@@ -128,6 +137,16 @@ export class GameSession implements GameFacade {
     this.game?.requestToggleHelp()
   }
 
+  isAudioEnabled(): boolean {
+    return this.audio?.enabled ?? true
+  }
+
+  toggleAudio(): void {
+    if (this.audio === null) return
+    this.audio.toggle()
+    this.publish()
+  }
+
   quitToMenu(): void {
     this.game?.requestQuitToMenu()
   }
@@ -177,6 +196,7 @@ export class GameSession implements GameFacade {
       isRecord: false,
       isFinalLevel: false,
       helpVisible: true,
+      audioEnabled: this.audio?.enabled ?? true,
       error: null,
     }
   }

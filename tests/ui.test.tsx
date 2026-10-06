@@ -24,6 +24,7 @@ const MENU_HUD: HudState = {
   isRecord: false,
   isFinalLevel: false,
   helpVisible: false,
+  audioEnabled: true,
   error: null,
 }
 
@@ -53,6 +54,8 @@ const createStub = (read: () => HudState): StubFacade => {
     start: () => calls.push('start'),
     togglePause: () => calls.push('togglePause'),
     toggleHelp: () => calls.push('toggleHelp'),
+    isAudioEnabled: () => true,
+    toggleAudio: () => calls.push('toggleAudio'),
     quitToMenu: () => calls.push('quitToMenu'),
     nextLevel: () => calls.push('nextLevel'),
     reload: () => calls.push('reload'),
@@ -167,6 +170,17 @@ describe('Screens', () => {
     renderScreens({ ...MENU_HUD, status: 'paused' }, stub, { scheme: 'touch', onSchemeChange })
     fireEvent.click(screen.getByRole('button', { name: 'ESCRITORIO' }))
     expect(onSchemeChange).toHaveBeenCalledWith('desktop')
+  })
+
+  it('toggles the procedural sound from the menu and the pause panel', () => {
+    const stub = createStub(() => MENU_HUD)
+    const { unmount } = renderScreens(MENU_HUD, stub)
+    fireEvent.click(screen.getByRole('button', { name: 'SONIDO: ON' }))
+    expect(stub.calls).toEqual(['toggleAudio'])
+    unmount()
+
+    renderScreens({ ...MENU_HUD, status: 'paused', audioEnabled: false }, stub)
+    expect(screen.getByRole('button', { name: 'SONIDO: OFF' })).not.toBeNull()
   })
 })
 

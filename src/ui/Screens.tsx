@@ -25,6 +25,25 @@ const CONTROLS: readonly string[] = [
   'H para abrir o cerrar la guía de power-ups y bloques',
 ]
 
+/** Paper toggle for the procedural sound (music and effects share it). */
+const SoundToggle = ({
+  hud,
+  session,
+}: {
+  readonly hud: HudState
+  readonly session: GameFacade
+}) => (
+  <div className="panel__settings">
+    <span className="panel__settings-label">Sonido</span>
+    <PaperButton
+      label={hud.audioEnabled ? 'SONIDO: ON' : 'SONIDO: OFF'}
+      tone={hud.audioEnabled ? 'primary' : 'ghost'}
+      pressed={hud.audioEnabled}
+      onClick={() => session.toggleAudio()}
+    />
+  </div>
+)
+
 /** Full-screen paper panel for a fatal engine/renderer failure. */
 export const EngineErrorScreen = ({ hud, session }: ErrorScreenProps) => {
   if (hud.error === null) return null
@@ -67,6 +86,7 @@ export const Screens = ({ hud, session, scheme, onSchemeChange }: ScreensProps) 
               <span className="panel__settings-label">Controles</span>
               <ControlSchemePicker scheme={scheme} onSelect={onSchemeChange} compact />
             </div>
+            <SoundToggle hud={hud} session={session} />
           </>
         )}
 
@@ -88,6 +108,7 @@ export const Screens = ({ hud, session, scheme, onSchemeChange }: ScreensProps) 
               <span className="panel__settings-label">Controles</span>
               <ControlSchemePicker scheme={scheme} onSelect={onSchemeChange} compact />
             </div>
+            <SoundToggle hud={hud} session={session} />
           </>
         )}
 

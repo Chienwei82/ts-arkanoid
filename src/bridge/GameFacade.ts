@@ -23,6 +23,10 @@ export interface GameFacade {
   togglePause(): void
   /** Opens/closes the help guide overlay (same behaviour as the H key). */
   toggleHelp(): void
+  /** Whether the procedural audio (music + effects) is currently on. */
+  isAudioEnabled(): boolean
+  /** Flips the audio mute state and persists the preference. */
+  toggleAudio(): void
   quitToMenu(): void
   nextLevel(): void
   /** Full page reload, the only reliable recovery after a lost GL context. */

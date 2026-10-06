@@ -1,3 +1,4 @@
+import type { AudioSignals, GameAudio } from '../src/core/audio'
 import { EventBus, type GameBus } from '../src/core/EventBus'
 import type { GameEventMap, GameEventName } from '../src/core/events'
 import type { Ball } from '../src/entities/types'
@@ -68,4 +69,43 @@ export const launchBall = (world: World, x: number, y: number, vx: number, vy: n
   copyVec(ball.prev, ball.pos)
   setVec(ball.vel, vx, vy)
   return ball
+}
+
+/** Test double for the engine's audio sink: records signals and bus bindings. */
+export interface AudioSpy {
+  readonly audio: GameAudio
+  readonly signals: AudioSignals[]
+  readonly buses: (GameBus | null)[]
+  toggles: number
+}
+
+export const createAudioSpy = (initial = true): AudioSpy => {
+  let enabled = initial
+  const spy: AudioSpy = {
+    signals: [],
+    buses: [],
+    toggles: 0,
+    audio: {
+      get enabled() {
+        return enabled
+      },
+      bind: (bus) => {
+        spy.buses.push(bus)
+      },
+      unbind: () => {
+        spy.buses.push(null)
+      },
+      unlock: () => undefined,
+      toggle: () => {
+        enabled = !enabled
+        spy.toggles += 1
+        return enabled
+      },
+      update: (_dt, signals) => {
+        spy.signals.push(signals)
+      },
+      dispose: () => undefined,
+    },
+  }
+  return spy
 }

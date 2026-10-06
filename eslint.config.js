@@ -90,5 +90,17 @@ export default tseslint.config(
     rules: { 'no-console': 'off' },
   },
 
+  // Dev-only scripts (song curation): they print to stdout on purpose.
+  {
+    files: ['tools/**/*.ts'],
+    languageOptions: { globals: globals.node },
+    rules: {
+      'no-console': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+    },
+  },
+
   prettier,
 )
