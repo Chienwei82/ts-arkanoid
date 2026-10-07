@@ -65,7 +65,7 @@
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   padding: calc(clamp(0.6rem, 1.6vw, 1.4rem) + var(--safe-top))
     calc(clamp(0.6rem, 1.6vw, 1.4rem) + var(--safe-right))
     calc(clamp(0.6rem, 1.6vw, 1.4rem) + var(--safe-bottom))
@@ -238,9 +238,18 @@
 /* ---- Panels (menu, pause, level cleared, game over) ------------------ */
 
 .screens {
-  display: grid;
-  place-items: center;
-  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 0;
+  overflow-y: auto;
+  /* The panel scrolls inside the overlay: vertical pans stay here instead of
+     being swallowed by the game surface's `touch-action: none`. */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  pointer-events: auto;
+  padding-block: 0.5rem 1rem;
 }
 
 /* Standalone variant (boot screens) that owns the whole shell. */
@@ -257,6 +266,7 @@
   gap: 0.55rem;
   min-width: min(24rem, 88vw);
   max-width: min(32rem, 92vw);
+  margin: auto;
   padding: clamp(1.2rem, 3vw, 1.9rem) clamp(1.2rem, 3.4vw, 2.3rem);
   text-align: center;
   background: var(--paper);
@@ -373,79 +383,103 @@
   font-size: clamp(0.72rem, 1.4vw, 0.85rem);
 }
 
-/* ---- Touch controls (joystick + action buttons over the canvas) ------- */
+/* ---- Touch controls (drag strip + fire button over the canvas) ----------- */
 
 .touch-controls {
   position: absolute;
   inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding:
+    0 calc(0.9rem + var(--safe-right))
+    calc(0.9rem + var(--safe-bottom))
+    calc(0.9rem + var(--safe-left));
   pointer-events: none;
 }
 
-.touch-stick {
-  position: absolute;
-  left: calc(1.1rem + var(--safe-left));
-  bottom: calc(1.1rem + var(--safe-bottom));
-  width: 8.6rem;
-  height: 8.6rem;
-  border-radius: 50%;
-  background: rgba(255, 250, 240, 0.26);
-  border: 0.18rem dashed rgba(58, 36, 23, 0.4);
-  box-shadow: 0 0.35rem 1rem rgba(58, 36, 23, 0.18);
+.touch-bar-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.7rem;
+  pointer-events: none;
+}
+
+.touch-bar {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 5.25rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 1.1rem;
+  background: rgba(255, 250, 240, 0.28);
+  border: 0.18rem dashed rgba(58, 36, 23, 0.45);
+  box-shadow: 0 0.35rem 1rem rgba(58, 36, 23, 0.2);
   pointer-events: auto;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.touch-stick__knob {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 3.6rem;
-  height: 3.6rem;
-  border-radius: 50%;
-  background: rgba(255, 250, 240, 0.9);
-  border: 0.16rem solid var(--ink);
-  box-shadow: 0 0.28rem 0 rgba(58, 36, 23, 0.35);
-  transform: translate(-50%, -50%);
+.touch-bar__hint {
+  font-size: clamp(0.7rem, 2.6vw, 0.9rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(58, 36, 23, 0.72);
+  text-align: center;
 }
 
-.touch-actions {
-  position: absolute;
-  right: calc(1.1rem + var(--safe-right));
-  bottom: calc(1.1rem + var(--safe-bottom));
+.touch-mini {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.7rem;
+  justify-content: flex-start;
+  gap: 0.55rem;
+  pointer-events: none;
+}
+
+.touch-mini .touch-btn {
+  pointer-events: auto;
 }
 
 .touch-btn {
   min-width: 3.25rem;
   min-height: 3.25rem;
-  opacity: 0.9;
+  opacity: 0.95;
+  pointer-events: auto;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .touch-btn--small {
-  padding: 0.35rem 0.85rem;
-  font-size: clamp(0.72rem, 1.4vw, 0.85rem);
+  padding: 0.45rem 1rem;
+  font-size: clamp(0.78rem, 1.6vw, 0.9rem);
 }
 
 .touch-btn--fire {
-  width: 6.4rem;
-  height: 6.4rem;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 1.05rem;
+  flex: 0 0 auto;
+  width: clamp(6.5rem, 26vw, 8.5rem);
+  min-height: 5.25rem;
+  padding: 0.6rem 1rem;
+  border-radius: 1.4rem;
+  font-size: clamp(1rem, 3.4vw, 1.3rem);
+  line-height: 1.1;
 }
 
 /* ---- Help guide (power-ups and bricks) -------------------------------- */
 
 .panel--wide {
   max-width: min(46rem, 94vw);
-  max-height: 88vh;
+  max-height: calc(100dvh - 7rem);
   overflow-y: auto;
+  /* Vertical pans must reach this inner scroller: it re-enables the pan the
+     game surface disables and stops the chain so the page never rubber-bands. */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .help__section {
@@ -611,19 +645,32 @@
     grid-template-columns: 1fr;
   }
 
-  .touch-stick {
-    width: 7.4rem;
-    height: 7.4rem;
+  /* Panels and buttons stay thumb-friendly on small screens. */
+  .panel {
+    gap: 0.5rem;
+    max-width: 94vw;
+    max-height: calc(100dvh - 6rem);
   }
 
-  .touch-stick__knob {
-    width: 3.1rem;
-    height: 3.1rem;
+  .panel__actions {
+    width: 100%;
   }
 
-  .touch-btn--fire {
-    width: 5.6rem;
-    height: 5.6rem;
+  .panel__actions .btn {
+    flex: 1 1 12rem;
+    min-height: 3.25rem;
+  }
+
+  .scheme-picker .btn {
+    min-height: 3rem;
+  }
+
+  .touch-controls {
+    padding-bottom: calc(0.75rem + var(--safe-bottom));
+  }
+
+  .touch-bar {
+    min-height: 4.75rem;
   }
 }
 

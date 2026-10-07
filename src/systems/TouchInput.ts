@@ -5,8 +5,8 @@ import type { InputFrame } from './InputManager'
 export type TouchAction = 'launch' | 'togglePause' | 'toggleHelp'
 
 /**
- * Touch input source fed by the on-screen controls: a virtual joystick writes
- * the movement axis and buttons press/release actions. `mergeInto` folds this
+ * Touch input source fed by the on-screen controls: the drag strip writes the
+ * movement axis and buttons press/release actions. `mergeInto` folds this
  * state into the same InputFrame the keyboard and mouse produce, so gameplay
  * never learns where the input came from. State is per-session, not per-frame:
  * no allocation happens on the hot path.
@@ -18,7 +18,7 @@ export class TouchInput {
   private edgePause = false
   private edgeHelp = false
 
-  /** Joystick position in the -1..1 range. */
+  /** Relative-drag position in the -1..1 range. */
   setAxis(axis: number): void {
     this.axisValue = clamp(axis, -1, 1)
   }
