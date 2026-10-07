@@ -11,26 +11,10 @@ const take = (touch: TouchInput): InputFrame => {
   return next
 }
 
-/** jsdom lays everything out at zero; the stick needs a real box to measure. */
-const stubStickRect = (element: Element): void => {
-  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
-    left: 0,
-    top: 0,
-    width: 100,
-    height: 100,
-    right: 100,
-    bottom: 100,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  })
-}
-
-const stickOf = (container: HTMLElement): HTMLElement => {
-  const stick = container.querySelector<HTMLElement>('.touch-stick')
-  if (stick === null) throw new Error('joystick not rendered')
-  stubStickRect(stick)
-  return stick
+const barOf = (container: HTMLElement): HTMLElement => {
+  const bar = container.querySelector<HTMLElement>('.touch-bar')
+  if (bar === null) throw new Error('drag bar not rendered')
+  return bar
 }
 
 afterEach(() => {
@@ -39,37 +23,55 @@ afterEach(() => {
 })
 
 describe('TouchControls', () => {
-  it('renders the joystick and one button per game action', () => {
+  it('renders the drag bar and one button per game action', () => {
     const { container } = render(<TouchControls touch={new TouchInput()} />)
 
-    expect(stickOf(container)).not.toBeNull()
-    for (const label of ['LANZAR', 'PAUSA', 'AYUDA']) {
+    expect(barOf(container)).not.toBeNull()
+    for (const label of ['DISPARAR', 'PAUSA', 'AYUDA']) {
       expect(screen.getByRole('button', { name: label })).not.toBeNull()
     }
   })
 
-  it('steers the paddle axis from the joystick and re-centres on release', () => {
+  it('steers the paddle axis while dragging and stops on release', () => {
     const touch = new TouchInput()
     const { container } = render(<TouchControls touch={touch} />)
-    const stick = stickOf(container)
+    const bar = barOf(container)
 
-    fireEvent.pointerDown(stick, { pointerId: 1, clientX: 100, clientY: 50 })
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 100, clientY: 400 })
+    fireEvent.pointerMove(bar, { pointerId: 1, clientX: 172, clientY: 400 })
     expect(take(touch).axis).toBeCloseTo(1, 5)
 
-    fireEvent.pointerMove(stick, { pointerId: 1, clientX: 75, clientY: 50 })
-    expect(take(touch).axis).toBeCloseTo(0.39, 2)
+    fireEvent.pointerMove(bar, { pointerId: 1, clientX: 64, clientY: 400 })
+    expect(take(touch).axis).toBeCloseTo(-0.5, 5)
 
-    fireEvent.pointerUp(stick, { pointerId: 1, clientX: 75, clientY: 50 })
+    vi.spyOn(performance, 'now').mockReturnValue(10_000)
+    fireEvent.pointerUp(bar, { pointerId: 1, clientX: 64, clientY: 400 })
     expect(take(touch).axis).toBe(0)
   })
 
-  it('supports multitouch: joystick and button held at the same time', () => {
+  it('fires a launch edge when the bar is tapped', () => {
     const touch = new TouchInput()
     const { container } = render(<TouchControls touch={touch} />)
-    const stick = stickOf(container)
+    const bar = barOf(container)
 
-    fireEvent.pointerDown(stick, { pointerId: 1, clientX: 100, clientY: 50 })
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'LANZAR' }), {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(1100)
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 200, clientY: 400 })
+    fireEvent.pointerUp(bar, { pointerId: 1, clientX: 203, clientY: 402 })
+
+    const first = take(touch)
+    expect(first.launch).toBe(true)
+    expect(first.start).toBe(true)
+    expect(take(touch).launch).toBe(false)
+  })
+
+  it('supports multitouch: drag bar and fire button held at the same time', () => {
+    const touch = new TouchInput()
+    const { container } = render(<TouchControls touch={touch} />)
+    const bar = barOf(container)
+
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 100, clientY: 400 })
+    fireEvent.pointerMove(bar, { pointerId: 1, clientX: 172, clientY: 400 })
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'DISPARAR' }), {
       pointerId: 2,
       clientX: 300,
       clientY: 400,
@@ -85,7 +87,7 @@ describe('TouchControls', () => {
   it('keeps firing until every finger leaves the button', () => {
     const touch = new TouchInput()
     render(<TouchControls touch={touch} />)
-    const fire = screen.getByRole('button', { name: 'LANZAR' })
+    const fire = screen.getByRole('button', { name: 'DISPARAR' })
 
     fireEvent.pointerDown(fire, { pointerId: 1 })
     fireEvent.pointerDown(fire, { pointerId: 2 })
@@ -98,32 +100,35 @@ describe('TouchControls', () => {
     expect(take(touch).fire).toBe(false)
   })
 
-  it('releases the joystick on pointercancel so the paddle never drifts', () => {
+  it('releases the drag bar on pointercancel so the paddle never drifts', () => {
     const touch = new TouchInput()
     const { container } = render(<TouchControls touch={touch} />)
-    const stick = stickOf(container)
+    const bar = barOf(container)
 
-    fireEvent.pointerDown(stick, { pointerId: 1, clientX: 100, clientY: 50 })
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 100, clientY: 400 })
+    fireEvent.pointerMove(bar, { pointerId: 1, clientX: 172, clientY: 400 })
     expect(take(touch).axis).not.toBe(0)
 
-    fireEvent.pointerCancel(stick, { pointerId: 1 })
+    fireEvent.pointerCancel(bar, { pointerId: 1 })
     expect(take(touch).axis).toBe(0)
   })
 
-  it('ignores a second finger on the joystick and follows the first', () => {
+  it('ignores a second finger on the drag bar and follows the first', () => {
     const touch = new TouchInput()
     const { container } = render(<TouchControls touch={touch} />)
-    const stick = stickOf(container)
+    const bar = barOf(container)
 
-    fireEvent.pointerDown(stick, { pointerId: 1, clientX: 100, clientY: 50 })
-    fireEvent.pointerDown(stick, { pointerId: 2, clientX: 0, clientY: 50 })
-    fireEvent.pointerMove(stick, { pointerId: 2, clientX: 0, clientY: 50 })
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 100, clientY: 400 })
+    fireEvent.pointerMove(bar, { pointerId: 1, clientX: 172, clientY: 400 })
+    fireEvent.pointerDown(bar, { pointerId: 2, clientX: 300, clientY: 400 })
+    fireEvent.pointerMove(bar, { pointerId: 2, clientX: 100, clientY: 400 })
     expect(take(touch).axis).toBeCloseTo(1, 5)
 
-    fireEvent.pointerUp(stick, { pointerId: 2 })
+    vi.spyOn(performance, 'now').mockReturnValue(10_000)
+    fireEvent.pointerUp(bar, { pointerId: 2 })
     expect(take(touch).axis).toBeCloseTo(1, 5)
 
-    fireEvent.pointerUp(stick, { pointerId: 1 })
+    fireEvent.pointerUp(bar, { pointerId: 1, clientX: 172, clientY: 400 })
     expect(take(touch).axis).toBe(0)
   })
 

@@ -6,10 +6,11 @@ interface TouchControlsProps {
   readonly touch: TouchInput
 }
 
-/** Fraction of the stick travel ignored, so resting fingers never drift. */
-const DEAD_ZONE = 0.18
-/** Knob travel as a percentage of the stick radius. */
-const KNOB_TRAVEL = 32
+/** Pixels of finger travel from the grab point that command full paddle speed. */
+const DRAG_FULL_SPEED_PX = 72
+/** Max tap duration / travel before a drag-strip touch stops counting as a tap. */
+const TAP_MAX_MS = 300
+const TAP_MAX_PX = 14
 
 const capturePointer = (element: Element, pointerId: number): void => {
   try {
@@ -67,43 +68,36 @@ const HoldButton = ({
 }
 
 /**
- * On-screen controls for touch play: a virtual joystick steers the paddle and
- * three paper buttons cover every game action (launch/fire, pause, help). The
- * widgets are HTML over the canvas — never part of the three.js scene — and
- * talk to the same TouchInput sink the InputManager reads, so they are just
- * another input device for the engine.
+ * On-screen controls for touch play: a bottom drag strip steers the paddle
+ * (drag anywhere along it, or tap it to launch/fire) and a big ergonomic fire
+ * button covers launch + laser hold; pause/help stay reachable as small chips
+ * above it. The widgets are HTML over the canvas — never part of the three.js
+ * scene — and talk to the same TouchInput sink the InputManager reads, so they
+ * are just another input device for the engine.
  */
 export const TouchControls = ({ touch }: TouchControlsProps) => {
-  const baseRef = useRef<HTMLDivElement | null>(null)
-  const knobRef = useRef<HTMLDivElement | null>(null)
-  const stickPointer = useRef<number | null>(null)
+  const barPointer = useRef<number | null>(null)
+  const barStartX = useRef(0)
+  const barStartTime = useRef(0)
 
-  const placeKnob = (offsetX: number, radius: number): void => {
-    const knob = knobRef.current
-    if (knob === null) return
-    const ratio = radius > 0 ? clamp(offsetX / radius, -1, 1) : 0
-    knob.style.left = `${50 + ratio * KNOB_TRAVEL}%`
+  const setBarAxis = (clientX: number): void => {
+    const delta = clientX - barStartX.current
+    touch.setAxis(clamp(delta / DRAG_FULL_SPEED_PX, -1, 1))
   }
 
-  const updateAxis = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    const base = baseRef.current
-    if (base === null) return
-    const rect = base.getBoundingClientRect()
-    const radius = rect.width / 2
-    const offsetX = clamp(event.clientX - (rect.left + radius), -radius, radius)
-    const raw = radius > 0 ? offsetX / radius : 0
-    placeKnob(offsetX, radius)
-    const magnitude = Math.abs(raw)
-    touch.setAxis(
-      magnitude <= DEAD_ZONE ? 0 : Math.sign(raw) * ((magnitude - DEAD_ZONE) / (1 - DEAD_ZONE)),
-    )
-  }
-
-  const endStick = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (event.pointerId !== stickPointer.current) return
-    stickPointer.current = null
+  const endBar = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.pointerId !== barPointer.current) return
+    const travel = Math.abs(event.clientX - barStartX.current)
+    const duration = performance.now() - barStartTime.current
+    const wasTap = travel <= TAP_MAX_PX && duration <= TAP_MAX_MS
+    barPointer.current = null
     touch.setAxis(0)
-    placeKnob(0, 1)
+    // A quick tap on the strip doubles as launch/fire so players can play
+    // one-handed without reaching for the fire button.
+    if (wasTap) {
+      touch.press('launch')
+      touch.release('launch')
+    }
   }
 
   return (
@@ -113,27 +107,31 @@ export const TouchControls = ({ touch }: TouchControlsProps) => {
       aria-label="Controles táctiles"
       onContextMenu={(event) => event.preventDefault()}
     >
-      <div
-        ref={baseRef}
-        className="touch-stick"
-        aria-hidden="true"
-        onPointerDown={(event) => {
-          if (stickPointer.current !== null) return
-          capturePointer(event.currentTarget, event.pointerId)
-          stickPointer.current = event.pointerId
-          updateAxis(event)
-        }}
-        onPointerMove={(event) => {
-          if (event.pointerId !== stickPointer.current) return
-          updateAxis(event)
-        }}
-        onPointerUp={endStick}
-        onPointerCancel={endStick}
-        onLostPointerCapture={endStick}
-      >
-        <div ref={knobRef} className="touch-stick__knob" />
+      <div className="touch-bar-row">
+        <div
+          className="touch-bar"
+          aria-hidden="true"
+          onPointerDown={(event) => {
+            if (barPointer.current !== null) return
+            capturePointer(event.currentTarget, event.pointerId)
+            barPointer.current = event.pointerId
+            barStartX.current = event.clientX
+            barStartTime.current = performance.now()
+            touch.setAxis(0)
+          }}
+          onPointerMove={(event) => {
+            if (event.pointerId !== barPointer.current) return
+            setBarAxis(event.clientX)
+          }}
+          onPointerUp={endBar}
+          onPointerCancel={endBar}
+          onLostPointerCapture={endBar}
+        >
+          <span className="touch-bar__hint">◀ arrastra para mover · toca para lanzar ▶</span>
+        </div>
+        <HoldButton label="DISPARAR" action="launch" touch={touch} className="touch-btn--fire" />
       </div>
-      <div className="touch-actions">
+      <div className="touch-mini">
         <HoldButton
           label="AYUDA"
           action="toggleHelp"
@@ -148,7 +146,6 @@ export const TouchControls = ({ touch }: TouchControlsProps) => {
           tone="ghost"
           className="touch-btn--small"
         />
-        <HoldButton label="LANZAR" action="launch" touch={touch} className="touch-btn--fire" />
       </div>
     </div>
   )
