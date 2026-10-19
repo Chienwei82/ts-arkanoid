@@ -247,7 +247,13 @@ export class CraftGameRenderer implements GameRenderer {
           color,
           this.effectCount(chain ? CONFETTI.chain : CONFETTI.brick),
         )
-        this.sparks.burst(pos.x, pos.y, RENDER.depth.confetti, color, this.effectCount(SPARKS.brick))
+        this.sparks.burst(
+          pos.x,
+          pos.y,
+          RENDER.depth.confetti,
+          color,
+          this.effectCount(SPARKS.brick),
+        )
         this.addTrauma(chain ? TRAUMA.chain : TRAUMA.brick)
         if (type === 'explosive') {
           this.waves.spawn(pos.x, pos.y, RENDER.depth.brick + 1, color)
@@ -262,7 +268,13 @@ export class CraftGameRenderer implements GameRenderer {
           color,
           this.effectCount(CONFETTI.damaged),
         )
-        this.sparks.burst(pos.x, pos.y, RENDER.depth.confetti, color, this.effectCount(SPARKS.damaged))
+        this.sparks.burst(
+          pos.x,
+          pos.y,
+          RENDER.depth.confetti,
+          color,
+          this.effectCount(SPARKS.damaged),
+        )
         this.addTrauma(TRAUMA.damaged)
       }),
       this.bus.on('paddleHit', ({ strength }) => {

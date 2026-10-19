@@ -71,7 +71,17 @@ export class SparkSystem {
     this.mesh.frustumCulled = false
 
     this.sparks = Array.from({ length: capacity }, () => ({
-      x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 0, life: 0, r: 1, g: 1, b: 1,
+      x: 0,
+      y: 0,
+      z: 0,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      size: 0,
+      life: 0,
+      r: 1,
+      g: 1,
+      b: 1,
     }))
     this.freeSlots = Array.from({ length: capacity }, (_, i) => capacity - 1 - i)
     for (let slot = 0; slot < capacity; slot += 1) this.hide(slot)
@@ -84,7 +94,8 @@ export class SparkSystem {
   /** Emit a burst of sparks at a world point, tinted by colour. */
   burst(x: number, y: number, z: number, colour: number, count: number): void {
     this.colour.setHex(colour)
-    for (let i = 0; i < count; i += 1) this.spawn(x, y, z, this.colour.r, this.colour.g, this.colour.b)
+    for (let i = 0; i < count; i += 1)
+      this.spawn(x, y, z, this.colour.r, this.colour.g, this.colour.b)
   }
 
   update(dt: number): void {
