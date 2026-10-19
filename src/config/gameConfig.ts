@@ -70,16 +70,17 @@ export const EXPLOSION = {
 } as const
 
 /**
- * Visual tuning for the papercraft renderer. Every value below is consumed by
- * `src/rendering`; gameplay never reads this block.
+ * Visual tuning for the space-arcade renderer. Every value below is consumed
+ * by `src/rendering`; gameplay never reads this block.
  */
 export const RENDER = {
   maxPixelRatio: 2,
   camera: { fov: 42, margin: 1.32, tilt: 2.4, dolly: 0.16 },
-  // Gentle bloom only lifts the brightest paper highlights (keeps the craft look).
-  bloom: { strength: 0.35, radius: 0.5, threshold: 0.92 },
-  vignette: 0.34,
-  grain: 0.045,
+  // Arcade neon bloom: lifts plasma, lasers and hull highlights into glow.
+  bloom: { strength: 0.85, radius: 0.55, threshold: 0.6 },
+  vignette: 0.46,
+  grain: 0.03,
+  scanlines: 0.12,
   shake: { maxTrauma: 1, decay: 1.9, offset: 0.9, roll: 0.035 },
   /** Z planes per gameplay layer; keeps depth sorting obvious and readable. */
   depth: {
@@ -110,8 +111,8 @@ export const RENDER = {
   outlineScale: { actor: 1.14 },
   confettiCapacity: 600,
   confetti: { life: 1.05, spread: 15, rise: 11, gravity: 30, spin: 8, size: 0.62 },
-  trail: { length: 22, spacing: 0.45, size: 2.3, color: '#fff2c4' },
-  ballLight: { intensity: 45, distance: 34, color: '#fff1c9' },
+  trail: { length: 22, spacing: 0.45, size: 2.6, color: '#35e0ff' },
+  ballLight: { intensity: 60, distance: 40, color: '#7df9ff' },
   waves: { capacity: 4, duration: 0.45, maxRadius: 9 },
   background: { cloudCount: 7, floaterCount: 5, boxCount: 8, bobAmplitude: 0.9 },
   card: { size: 3.6, bob: 0.55, spin: 1.3 },
@@ -130,10 +131,17 @@ export const RENDER = {
     pulseSpeed: 5,
   },
   /**
-   * Urban "building under construction" diorama: a tall facade with a grid of
-   * windows (randomly lit), rooftop clutter, scaffolding, service pipes and a
-   * ground slab behind/around the play board.
+   * Deep-space diorama: a layered starfield with a nebula backdrop, a ringed
+   * planet on the horizon, side energy pylons and a grid deck behind the
+   * play board.
    */
+  space: {
+    stars: { count: 420, countLow: 180, depthNear: -18, depthFar: -70, size: 0.55 },
+    planet: { distance: -58, size: 20, ringSize: 30 },
+    grid: { depth: -4, top: -FIELD.halfHeight - 5.5, height: 6, depthSize: 14 },
+    pylon: { x: FIELD.halfWidth * 1.26, z: -7, count: 6 },
+  },
+  /** Kept for save-shape stability: mirrors `space` while the diorama migrates. */
   building: {
     facade: { depth: -15, widthFactor: 3.6, topMargin: 3, bottomMargin: 6, thickness: 2.4 },
     window: { size: 2.6, gap: 0.7, litChance: 0.5, flickerChance: 0.05, flickerInterval: 0.6 },

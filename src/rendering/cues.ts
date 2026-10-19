@@ -1,9 +1,9 @@
 import type { PowerUpStatus, PowerUpType } from '../entities/types'
 
 /**
- * Visual priority when several power-ups are active at once: the paddle can only
- * wear one cue, so the most "loud" effect wins. Pure and DOM-free on purpose, so
- * the choice is unit-tested without a GPU.
+ * Visual priority when several power-ups are active at once: the ship can only
+ * wear one cue, so the most "loud" module wins. Pure and DOM-free on purpose,
+ * so the choice is unit-tested without a GPU.
  */
 export const POWER_UP_PRIORITY: readonly PowerUpType[] = [
   'laser',
@@ -16,7 +16,7 @@ export const POWER_UP_PRIORITY: readonly PowerUpType[] = [
 ]
 
 /**
- * Picks the power-up the paddle should dress up as, or `null` when nothing is
+ * Picks the module the ship should display as, or `null` when nothing is
  * running. Deterministic so the renderer (and its tests) never disagree.
  */
 export const primaryPowerUp = (active: readonly PowerUpStatus[]): PowerUpType | null => {

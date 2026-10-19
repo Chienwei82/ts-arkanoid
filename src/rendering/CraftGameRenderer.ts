@@ -45,16 +45,16 @@ const TRAUMA = {
   gameOver: 0.9,
 }
 const CELEBRATION_COLOURS: readonly number[] = [
-  PALETTE.red,
-  PALETTE.orange,
-  PALETTE.yellow,
-  PALETTE.green,
   PALETTE.blue,
+  PALETTE.teal,
   PALETTE.purple,
   PALETTE.pink,
-  PALETTE.teal,
+  PALETTE.green,
+  PALETTE.yellow,
+  PALETTE.orange,
+  PALETTE.red,
 ].map((hex) => hexToInt(hex))
-const EXPOSURE = 1.05
+const EXPOSURE = 1.1
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 /** Confetti kept when the visitor asks for reduced motion. */

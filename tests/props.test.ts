@@ -4,8 +4,11 @@ import {
   createAcUnitGeometry,
   createAntennaGeometry,
   createCloudGeometry,
+  createPylonGeometry,
   createServicePipeGeometry,
+  createShipHullGeometry,
   createWaterTankGeometry,
+  createWingGeometry,
 } from '../src/rendering/props'
 
 /** A merged prop must be one drawable: positions, normals and UVs, all present. */
@@ -17,8 +20,20 @@ const expectDrawable = (geometry: BufferGeometry): void => {
   geometry.dispose()
 }
 
-describe('paper prop geometry', () => {
-  it('merges the cloud puffs into one geometry with normals', () => {
+describe('space prop geometry', () => {
+  it('merges the starfighter hull and wings into one geometry with normals', () => {
+    for (const build of [createShipHullGeometry, createWingGeometry, createPylonGeometry]) {
+      const geometry = build()
+      const position = geometry.getAttribute('position')
+
+      expect(position.count).toBeGreaterThan(20)
+      expect(geometry.getAttribute('normal')).toBeDefined()
+      expect(geometry.getAttribute('uv')).toBeDefined()
+      geometry.dispose()
+    }
+  })
+
+  it('keeps the legacy papercraft builders drawable', () => {
     const cloud = createCloudGeometry()
     const position = cloud.getAttribute('position')
 

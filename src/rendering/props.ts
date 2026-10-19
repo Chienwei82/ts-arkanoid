@@ -8,16 +8,57 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 /**
- * Merged low-poly props. Each prop is a single geometry so all of its copies can
- * be instanced in one draw call, and merging happens once at start-up.
+ * Merged low-poly space props. Each prop is a single geometry so all of its
+ * copies can be instanced in one draw call, and merging happens once at
+ * start-up.
  *
  * Kept apart from SceneBuilder so the merge can be unit-tested headlessly.
+ * Legacy papercraft builders stay as aliases so older tests keep compiling
+ * while the diorama migrates to the space set.
  */
 
 const mergeParts = (parts: BufferGeometry[]): BufferGeometry => {
-  const merged = mergeGeometries(parts)
+  const merged = mergeGeometries(parts, false)
   for (const part of parts) part.dispose()
+  if (merged === null) throw new Error('mergeParts: incompatible geometry attributes')
   return merged
+}
+
+/** Starfighter hull: nose cone, cockpit spine and twin engine nacelles. */
+export const createShipHullGeometry = (): BufferGeometry => {
+  const nose = new ConeGeometry(1.15, 2.6, 8).toNonIndexed()
+  nose.rotateX(Math.PI / 2)
+  nose.translate(0, 1.1, 0.6)
+  const spine = new BoxGeometry(1.1, 3.4, 0.9).toNonIndexed()
+  spine.translate(0, -0.6, 0)
+  const leftEngine = new CylinderGeometry(0.42, 0.52, 2.6, 8).toNonIndexed()
+  leftEngine.rotateX(Math.PI / 2)
+  leftEngine.translate(-1.35, -1, -0.2)
+  const rightEngine = new CylinderGeometry(0.42, 0.52, 2.6, 8).toNonIndexed()
+  rightEngine.rotateX(Math.PI / 2)
+  rightEngine.translate(1.35, -1, -0.2)
+  return mergeParts([nose, spine, leftEngine, rightEngine])
+}
+
+/** Swept Galaga-style wing with a tip cannon pod. */
+export const createWingGeometry = (): BufferGeometry => {
+  const wing = new BoxGeometry(3.4, 0.5, 1.5).toNonIndexed()
+  wing.translate(0, 0, 0)
+  const tip = new CylinderGeometry(0.34, 0.34, 1.8, 8).toNonIndexed()
+  tip.rotateX(Math.PI / 2)
+  tip.translate(1.7, 0, 0.4)
+  return mergeParts([wing, tip])
+}
+
+/** Reactor spire: stacked core with an emissive tip for pylons and beacons. */
+export const createPylonGeometry = (): BufferGeometry => {
+  const base = new BoxGeometry(1.8, 0.8, 1.8).toNonIndexed()
+  base.translate(0, 0.4, 0)
+  const mast = new CylinderGeometry(0.28, 0.42, 9, 8).toNonIndexed()
+  mast.translate(0, 5.2, 0)
+  const crown = new IcosahedronGeometry(0.85, 1).toNonIndexed()
+  crown.translate(0, 10.2, 0)
+  return mergeParts([base, mast, crown])
 }
 
 /** Fluffy paper cloud: four overlapping spheres. */

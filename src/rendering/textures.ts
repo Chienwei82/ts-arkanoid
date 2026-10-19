@@ -4,9 +4,10 @@ import type { PowerUpType } from '../entities/types'
 import type { BrickMaterial } from './brickMaterial'
 
 /**
- * Every texture is painted on a canvas at start-up: the papercraft look needs
- * fibre speckles and sticker-like icons, and generating them once is far
- * cheaper than shipping images (and keeps the bundle tiny).
+ * Every texture is painted on a canvas at start-up: the space-arcade look
+ * needs nebula gradients, hull speckles and neon sticker-like icons, and
+ * generating them once is far cheaper than shipping images (and keeps the
+ * bundle tiny).
  */
 
 const SKY_SIZE = 256
@@ -37,7 +38,7 @@ const toTexture = (canvas: HTMLCanvasElement, repeat: Repeat | null): CanvasText
   return texture
 }
 
-/** Soft vertical gradient standing in for the illustration sky. */
+/** Deep-space gradient with magenta/cyan nebula blobs standing in for the sky. */
 const paintSky = (): CanvasTexture => {
   const canvas = createCanvas(SKY_SIZE)
   const ctx = canvas.getContext('2d')
@@ -49,20 +50,37 @@ const paintSky = (): CanvasTexture => {
     gradient.addColorStop(1, PALETTE.skyHorizon)
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, SKY_SIZE, SKY_SIZE)
+    const blobs: readonly (readonly [number, number, number, string])[] = [
+      [70, 90, 90, 'rgba(160, 107, 255, 0.24)'],
+      [190, 160, 70, 'rgba(63, 216, 224, 0.2)'],
+      [130, 200, 60, 'rgba(255, 61, 240, 0.12)'],
+    ]
+    for (const [x, y, radius, colour] of blobs) {
+      const blob = ctx.createRadialGradient(x, y, 0, x, y, radius)
+      blob.addColorStop(0, colour)
+      blob.addColorStop(1, 'rgba(0, 0, 0, 0)')
+      ctx.fillStyle = blob
+      ctx.fillRect(0, 0, SKY_SIZE, SKY_SIZE)
+    }
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+    for (let i = 0; i < 90; i += 1) {
+      const size = Math.random() < 0.12 ? 2 : 1
+      ctx.fillRect(Math.random() * SKY_SIZE, Math.random() * SKY_SIZE, size, size)
+    }
   }
   return toTexture(canvas, null)
 }
 
-/** Paper fibre noise: barely visible, but it sells the "printed on card" look. */
+/** Brushed hull noise: barely visible, but it sells the "painted starship" look. */
 const paintFiber = (repeat: Repeat): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
-    ctx.fillStyle = '#fffdf7'
+    ctx.fillStyle = '#0e1533'
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
     for (let i = 0; i < 900; i += 1) {
       const dark = Math.random() > 0.55
-      ctx.fillStyle = dark ? 'rgba(58, 36, 23, 0.045)' : 'rgba(255, 255, 255, 0.65)'
+      ctx.fillStyle = dark ? 'rgba(4, 8, 26, 0.16)' : 'rgba(125, 249, 255, 0.08)'
       ctx.fillRect(
         Math.random() * FIBER_SIZE,
         Math.random() * FIBER_SIZE,
@@ -74,7 +92,7 @@ const paintFiber = (repeat: Repeat): CanvasTexture => {
   return toTexture(canvas, repeat)
 }
 
-/** Radial falloff used for the trail sprites and the sun disc. */
+/** Radial falloff used for trail sprites, engine glow and the planet disc. */
 const paintGlow = (): CanvasTexture => {
   const canvas = createCanvas(GLOW_SIZE)
   const ctx = canvas.getContext('2d')
@@ -82,8 +100,8 @@ const paintGlow = (): CanvasTexture => {
     const half = GLOW_SIZE / 2
     const gradient = ctx.createRadialGradient(half, half, 0, half, half, half)
     gradient.addColorStop(0, 'rgba(255, 255, 255, 1)')
-    gradient.addColorStop(0.35, 'rgba(255, 246, 214, 0.55)')
-    gradient.addColorStop(1, 'rgba(255, 246, 214, 0)')
+    gradient.addColorStop(0.35, 'rgba(125, 249, 255, 0.6)')
+    gradient.addColorStop(1, 'rgba(125, 249, 255, 0)')
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, GLOW_SIZE, GLOW_SIZE)
   }
@@ -109,30 +127,33 @@ const paintDash = (): CanvasTexture => {
   return toTexture(canvas, [1, 5])
 }
 
-/** Red/cream chequerboard for the floating board platforms. */
+/** Neon chequerboard for the docking platforms: dark hull with cyan inlay. */
 const paintChecker = (): CanvasTexture => {
   const canvas = createCanvas(CHECKER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
     const half = CHECKER_SIZE / 2
-    ctx.fillStyle = PALETTE.paper
+    ctx.fillStyle = '#0b1230'
     ctx.fillRect(0, 0, CHECKER_SIZE, CHECKER_SIZE)
-    ctx.fillStyle = PALETTE.checkerRed
+    ctx.fillStyle = 'rgba(53, 196, 255, 0.85)'
     ctx.fillRect(0, 0, half, half)
     ctx.fillRect(half, half, half, half)
+    ctx.strokeStyle = 'rgba(125, 249, 255, 0.5)'
+    ctx.lineWidth = 3
+    ctx.strokeRect(1.5, 1.5, CHECKER_SIZE - 3, CHECKER_SIZE - 3)
   }
   return toTexture(canvas, [1, 1])
 }
 
-/** Random speckle used by concrete: light and dark grains plus a few cracks. */
+/** Station-core plating: dark grains, panel seams and a few energy cracks. */
 const paintConcrete = (): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
-    ctx.fillStyle = '#f6f4ef'
+    ctx.fillStyle = '#232c52'
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
     for (let i = 0; i < 700; i += 1) {
-      ctx.fillStyle = Math.random() > 0.5 ? 'rgba(90, 90, 90, 0.1)' : 'rgba(255, 255, 255, 0.5)'
+      ctx.fillStyle = Math.random() > 0.5 ? 'rgba(4, 8, 26, 0.24)' : 'rgba(125, 249, 255, 0.1)'
       ctx.fillRect(
         Math.random() * FIBER_SIZE,
         Math.random() * FIBER_SIZE,
@@ -140,7 +161,7 @@ const paintConcrete = (): CanvasTexture => {
         Math.random() * 3 + 0.5,
       )
     }
-    ctx.strokeStyle = 'rgba(60, 60, 60, 0.4)'
+    ctx.strokeStyle = 'rgba(125, 249, 255, 0.4)'
     ctx.lineWidth = 2
     for (let crack = 0; crack < 3; crack += 1) {
       let x = Math.random() * FIBER_SIZE
@@ -158,16 +179,16 @@ const paintConcrete = (): CanvasTexture => {
   return toTexture(canvas, [1, 1])
 }
 
-/** Wooden crate: three planks with seams and a light grain streak pass. */
+/** Hull plating: dark alloy with seams and a faint brushed streak pass. */
 const paintPlanks = (): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
-    ctx.fillStyle = '#fdf6ea'
+    ctx.fillStyle = '#1a2450'
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
     const planks = 3
     const step = FIBER_SIZE / planks
-    ctx.strokeStyle = 'rgba(74, 48, 30, 0.42)'
+    ctx.strokeStyle = 'rgba(125, 249, 255, 0.28)'
     ctx.lineWidth = 3
     for (let i = 1; i < planks; i += 1) {
       ctx.beginPath()
@@ -175,7 +196,7 @@ const paintPlanks = (): CanvasTexture => {
       ctx.lineTo(FIBER_SIZE, i * step)
       ctx.stroke()
     }
-    ctx.strokeStyle = 'rgba(120, 84, 52, 0.18)'
+    ctx.strokeStyle = 'rgba(125, 249, 255, 0.12)'
     ctx.lineWidth = 1
     for (let i = 0; i < 26; i += 1) {
       const x = Math.random() * FIBER_SIZE
@@ -189,14 +210,14 @@ const paintPlanks = (): CanvasTexture => {
   return toTexture(canvas, [1, 1])
 }
 
-/** Sheet metal: brushed streaks, an inset panel border and four rivets. */
+/** Shielded armour: dark brushed plating, an inset energy border and bolts. */
 const paintMetalPanel = (): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
-    ctx.fillStyle = '#f4f6f8'
+    ctx.fillStyle = '#2b3a6e'
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
-    ctx.strokeStyle = 'rgba(148, 162, 178, 0.22)'
+    ctx.strokeStyle = 'rgba(125, 249, 255, 0.14)'
     ctx.lineWidth = 1
     for (let i = 0; i < 60; i += 1) {
       const y = Math.random() * FIBER_SIZE
@@ -205,10 +226,10 @@ const paintMetalPanel = (): CanvasTexture => {
       ctx.lineTo(FIBER_SIZE, y + (Math.random() - 0.5) * 2)
       ctx.stroke()
     }
-    ctx.strokeStyle = 'rgba(58, 36, 23, 0.35)'
+    ctx.strokeStyle = 'rgba(125, 249, 255, 0.45)'
     ctx.lineWidth = 3
     ctx.strokeRect(10, 10, FIBER_SIZE - 20, FIBER_SIZE - 20)
-    ctx.fillStyle = 'rgba(58, 36, 23, 0.5)'
+    ctx.fillStyle = 'rgba(217, 251, 255, 0.85)'
     const rivets: readonly (readonly [number, number])[] = [
       [18, 18],
       [FIBER_SIZE - 18, 18],
@@ -224,14 +245,14 @@ const paintMetalPanel = (): CanvasTexture => {
   return toTexture(canvas, [1, 1])
 }
 
-/** Hazard crate: diagonal dark stripes over a near-white base (TNT-style). */
+/** Reactor cell: dark hull with glowing diagonal conduits (volatile cargo). */
 const paintHazard = (): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
-    ctx.fillStyle = '#fdf6ea'
+    ctx.fillStyle = '#241031'
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
-    ctx.strokeStyle = 'rgba(58, 36, 23, 0.5)'
+    ctx.strokeStyle = 'rgba(255, 90, 46, 0.85)'
     ctx.lineWidth = 12
     const step = 30
     for (let x = -FIBER_SIZE; x < FIBER_SIZE * 2; x += step * 2) {
@@ -244,17 +265,17 @@ const paintHazard = (): CanvasTexture => {
   return toTexture(canvas, [1, 1])
 }
 
-/** Window pane: a glass gradient with an ink mullion cross and outer frame. */
+/** Docking porthole: a glowing viewport with a neon cross and outer hull ring. */
 const paintWindow = (): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
     const gradient = ctx.createLinearGradient(0, 0, 0, FIBER_SIZE)
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)')
-    gradient.addColorStop(1, 'rgba(198, 212, 234, 1)')
+    gradient.addColorStop(0, 'rgba(125, 249, 255, 1)')
+    gradient.addColorStop(1, 'rgba(29, 52, 120, 1)')
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
-    ctx.strokeStyle = 'rgba(58, 36, 23, 0.5)'
+    ctx.strokeStyle = 'rgba(4, 8, 26, 0.85)'
     ctx.lineWidth = 8
     ctx.beginPath()
     ctx.moveTo(FIBER_SIZE / 2, 0)
@@ -276,7 +297,7 @@ const paintBrickMaterials = (): Readonly<Record<BrickMaterial, CanvasTexture>> =
   explosive: paintHazard(),
 })
 
-/** Sticker recipe: colour fill, thick paper halo, thin ink border. */
+/** Neon capsule badge: colour fill, dark halo, thin ion rim. */
 const paintIcon = (
   colour: string,
   path: (ctx: CanvasRenderingContext2D) => void,
