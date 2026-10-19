@@ -8,7 +8,7 @@ interface HelpScreenProps {
   readonly session: GameFacade
 }
 
-/** Full-screen paper guide: what every power-up and brick does, plus H hint. */
+/** Full-screen arcade guide: what every module and hull does, plus H hint. */
 export const HelpScreen = ({ hud, session }: HelpScreenProps) => {
   const play = (): void => {
     session.toggleHelp()
@@ -17,11 +17,11 @@ export const HelpScreen = ({ hud, session }: HelpScreenProps) => {
   return (
     <div className="screens">
       <div className="panel panel--wide" role="dialog" aria-modal="true" aria-label="Guía de juego">
-        <h2 className="panel__title">Guía de juego</h2>
-        <p className="panel__tag">Power-ups y bloques de Paper Breaker</p>
+        <h2 className="panel__title">Guía de vuelo</h2>
+        <p className="panel__tag">Módulos y cascos de Star Breaker</p>
 
         <section className="help__section">
-          <h3 className="help__heading">Power-ups</h3>
+          <h3 className="help__heading">Módulos</h3>
           <ul className="help__grid">
             {POWER_UP_HELP.map((entry) => (
               <li key={entry.type} className="help-card">
@@ -38,7 +38,7 @@ export const HelpScreen = ({ hud, session }: HelpScreenProps) => {
         </section>
 
         <section className="help__section">
-          <h3 className="help__heading">Bloques</h3>
+          <h3 className="help__heading">Cascos</h3>
           <ul className="help__grid">
             {BRICK_HELP.map((entry) => (
               <li key={entry.type} className="help-card">

@@ -1,10 +1,11 @@
 import {
   BoxGeometry,
+  ConeGeometry,
   Group,
   IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  MeshStandardMaterial,
   PlaneGeometry,
   PointLight,
   type BufferGeometry,
@@ -17,21 +18,19 @@ import type { World } from '../systems/World'
 import { hexToInt, lerp } from '../utils/math'
 import {
   createGlowMaterial,
+  createHullMaterial,
   createInkMaterial,
+  createNeonMaterial,
   createOutlineMaterial,
-  createPaperMaterial,
 } from './materials'
 import type { CraftTextures } from './textures'
 
-const BALL_GLOW = 0.3
-const CARD_ICON_RATIO = 0.66
-const CARD_INK_RATIO = 1.1
 const LASER_SIZE = { width: 0.34, height: 1.7, depth: 0.3 }
 const CANNON_SIZE = { width: 0.7, height: 0.9, depth: PADDLE.depth }
+const CARD_ICON_RATIO = 0.66
+const CARD_INK_RATIO = 1.1
 const LASER_COLOUR = hexToInt(PALETTE.powerUp.laser)
 const BALL_COLOUR = hexToInt(PALETTE.ball)
-/** Special ball flavours glow harder than the plain cream ball. */
-const BALL_SPECIAL_GLOW = 0.7
 const BALL_TYPE_COLOURS: Readonly<Record<BallType, number>> = {
   standard: hexToInt(PALETTE.ballTypes.standard),
   fire: hexToInt(PALETTE.ballTypes.fire),
@@ -46,10 +45,10 @@ const NO_EMISSIVE = 0x000000
 const NO_SLOT = -1
 
 /**
- * Every moving actor of the board: the paddle stack, the ball pool (plus its
- * travelling light), falling power-up cards and laser bolts. Actors are pooled
- * once and only toggled/positioned afterwards, so gameplay frames never build
- * geometry.
+ * Every moving actor of the board: the starfighter stack, the plasma ball pool
+ * (plus its travelling light), falling supply capsules and laser bolts. Actors
+ * are pooled once and only toggled/positioned afterwards, so gameplay frames
+ * never build geometry.
  */
 export class ActorRenderer {
   private readonly root = new Group()
@@ -61,17 +60,20 @@ export class ActorRenderer {
   private readonly paddleRoot = new Group()
   private readonly paddleLayers: Mesh[] = []
   private readonly cannons: Mesh[] = []
+  private readonly engineFlames: Mesh[] = []
 
   private readonly ballRoot = new Group()
   private readonly ballInk: Mesh[] = []
   private readonly ballBodies: Mesh[] = []
-  private readonly ballMaterials: MeshLambertMaterial[] = []
+  private readonly ballCores: Mesh[] = []
+  private readonly ballMaterials: MeshStandardMaterial[] = []
   private readonly ballTypes: (BallType | null)[] = []
   private readonly ballLight: PointLight
 
   private readonly cardRoot = new Group()
   private readonly cardGroups: Group[] = []
   private readonly cardIconMaterials: MeshBasicMaterial[] = []
+  private readonly cardGlows: Mesh[] = []
   private readonly cardTypes: (PowerUpType | null)[] = []
   private readonly slotIds: Int32Array
 
@@ -81,10 +83,14 @@ export class ActorRenderer {
   private readonly guide: Mesh
   private readonly guideMaterial: MeshBasicMaterial
 
-  private readonly paddleBodyMaterial = new MeshLambertMaterial({
+  private readonly paddleBodyMaterial = new MeshStandardMaterial({
     color: hexToInt(PALETTE.paddle),
+    metalness: 0.6,
+    roughness: 0.32,
     flatShading: true,
   })
+  private readonly canopyMaterial = new MeshBasicMaterial({ color: hexToInt(PALETTE.guide) })
+  private readonly engineMaterial: MeshBasicMaterial
   private readonly cuePlateMaterial: MeshBasicMaterial
   private readonly cueAuraMaterial: MeshBasicMaterial
   private readonly cuePlate: Mesh
@@ -99,6 +105,8 @@ export class ActorRenderer {
 
   constructor(textures: CraftTextures) {
     this.textures = textures
+    this.engineMaterial = createNeonMaterial(hexToInt(PALETTE.powerUp.fast), 0.9)
+    this.materials.push(this.engineMaterial, this.canopyMaterial)
 
     this.paddleRoot.position.z = RENDER.depth.paddle
     this.root.add(this.paddleRoot)
@@ -193,8 +201,8 @@ export class ActorRenderer {
   }
 
   /**
-   * Dresses the paddle as the running power-up: aura, face sticker and emissive
-   * tint, all in the power-up's colour. `null` restores the bare red bar.
+   * Dresses the ship as the running power-up: aura, cockpit badge and hull
+   * tint, all in the power-up's colour. `null` restores the stock cyan hull.
    */
   setCueType(type: PowerUpType | null): void {
     if (type === this.cueType) return
@@ -252,6 +260,11 @@ export class ActorRenderer {
     for (let layer = 0; layer < this.paddleLayers.length; layer += 1) {
       const base = this.paddleLayerScales[layer]
       this.paddleLayers[layer].scale.set(base.x * widthScale, base.y * stretch, 1)
+    }
+    // Engine flames breathe with thrust; the wide cue stretches them apart.
+    const flamePulse = 1 + Math.sin(this.elapsed * 9) * 0.12 * this.motionScale
+    for (const flame of this.engineFlames) {
+      flame.scale.set(widthScale, flamePulse, widthScale)
     }
     const cannonOffset = paddle.halfWidth - CANNON_SIZE.width * 0.6
     this.cannons[0].position.x = -cannonOffset
@@ -368,7 +381,7 @@ export class ActorRenderer {
     this.geometries.push(geometry)
     const materials: Material[] = [
       createInkMaterial(),
-      createPaperMaterial(null),
+      createHullMaterial(hexToInt(PALETTE.paperShadow), this.textures.panelPaper),
       this.paddleBodyMaterial,
     ]
     this.materials.push(...materials)
@@ -383,11 +396,39 @@ export class ActorRenderer {
       this.paddleRoot.add(mesh)
     }
 
+    // Glowing canopy strip centred on the hull.
+    const canopyGeometry = new BoxGeometry(1.5, 0.55, 0.45)
+    this.geometries.push(canopyGeometry)
+    this.materials.push(this.canopyMaterial)
+    const canopy = new Mesh(canopyGeometry, this.canopyMaterial)
+    canopy.position.set(0, 0.4, PADDLE.depth / 2 + 0.1)
+    this.paddleRoot.add(canopy)
+
+    // Swept wings plus twin engine flames under the stern.
+    const wingGeometry = new BoxGeometry(3.2, 0.45, 0.7)
+    this.geometries.push(wingGeometry)
+    const wingMaterial = createHullMaterial(hexToInt(PALETTE.metalTrim), this.textures.panelPaper)
+    this.materials.push(wingMaterial)
+    for (const side of [-1, 1]) {
+      const wing = new Mesh(wingGeometry, wingMaterial)
+      wing.position.set(side * 1.8, -0.35, -0.15)
+      this.paddleRoot.add(wing)
+      const flameGeometry = new ConeGeometry(0.5, 1.5, 8)
+      this.geometries.push(flameGeometry)
+      const flame = new Mesh(flameGeometry, this.engineMaterial)
+      flame.position.set(side * 1.2, -1.4, -0.15)
+      flame.rotation.x = Math.PI
+      this.engineFlames.push(flame)
+      this.paddleRoot.add(flame)
+    }
+
     const cannonGeometry = new BoxGeometry(CANNON_SIZE.width, CANNON_SIZE.height, CANNON_SIZE.depth)
-    const cannonMaterial = new MeshLambertMaterial({
+    const cannonMaterial = new MeshStandardMaterial({
       color: LASER_COLOUR,
       emissive: LASER_COLOUR,
-      emissiveIntensity: 0.4,
+      emissiveIntensity: 1.1,
+      metalness: 0.4,
+      roughness: 0.3,
       flatShading: true,
     })
     this.geometries.push(cannonGeometry)
@@ -403,14 +444,19 @@ export class ActorRenderer {
   private buildBalls(): void {
     const geometry = new IcosahedronGeometry(BALL.radius, 1)
     this.geometries.push(geometry)
+    const coreGeometry = new IcosahedronGeometry(BALL.radius * 0.52, 1)
+    this.geometries.push(coreGeometry)
     const inkMaterial = createOutlineMaterial()
     this.materials.push(inkMaterial)
     for (let index = 0; index < BALL.maxCount; index += 1) {
-      // Each slot owns its material so the flavour colour can change per ball.
-      const bodyMaterial = new MeshLambertMaterial({
+      // Lit body keeps its shape under bloom instead of washing out to white;
+      // a small bright core gives the ball its glowing heart.
+      const bodyMaterial = new MeshStandardMaterial({
         color: BALL_COLOUR,
         emissive: BALL_COLOUR,
-        emissiveIntensity: BALL_GLOW,
+        emissiveIntensity: RENDER.ballGlow,
+        metalness: 0.35,
+        roughness: 0.45,
         flatShading: true,
       })
       this.materials.push(bodyMaterial)
@@ -421,14 +467,20 @@ export class ActorRenderer {
       ink.visible = false
       const body = new Mesh(geometry, bodyMaterial)
       body.visible = false
+      const coreMaterial = new MeshBasicMaterial({ color: 0xffffff })
+      this.materials.push(coreMaterial)
+      const core = new Mesh(coreGeometry, coreMaterial)
+      core.visible = false
       this.ballInk.push(ink)
       this.ballBodies.push(body)
+      this.ballCores.push(core)
       this.ballRoot.add(ink)
       this.ballRoot.add(body)
+      this.ballRoot.add(core)
     }
   }
 
-  /** Paints a ball slot for its flavour, only when the flavour actually changes. */
+  /** Paints a ball slot for its plasma flavour, only when it actually changes. */
   private applyBallType(index: number, type: BallType): void {
     if (this.ballTypes[index] === type) return
     this.ballTypes[index] = type
@@ -436,7 +488,8 @@ export class ActorRenderer {
     const material = this.ballMaterials[index]
     material.color.setHex(colour)
     material.emissive.setHex(colour)
-    material.emissiveIntensity = type === 'standard' ? BALL_GLOW : BALL_SPECIAL_GLOW
+    const core = this.ballCores[index]
+    ;(core.material as MeshBasicMaterial).color.setHex(0xffffff)
   }
 
   private buildCards(): void {
@@ -446,11 +499,7 @@ export class ActorRenderer {
     const iconGeometry = new PlaneGeometry(size * CARD_ICON_RATIO, size * CARD_ICON_RATIO)
     this.geometries.push(backGeometry, inkGeometry, iconGeometry)
     const inkMaterial = createInkMaterial()
-    const backMaterial = new MeshLambertMaterial({
-      color: hexToInt(PALETTE.paper),
-      map: this.textures.cardPaper,
-      flatShading: true,
-    })
+    const backMaterial = createHullMaterial(hexToInt(PALETTE.paper), this.textures.cardPaper)
     this.materials.push(inkMaterial, backMaterial)
 
     for (let slot = 0; slot < POWER_UPS.poolSize; slot += 1) {
@@ -462,10 +511,18 @@ export class ActorRenderer {
       const iconMaterial = new MeshBasicMaterial({ transparent: true, alphaTest: 0.15 })
       const icon = new Mesh(iconGeometry, iconMaterial)
       icon.position.z = 0.12
+      // Additive halo behind the icon so a falling power-up reads at a glance.
+      const glowMaterial = createGlowMaterial(this.textures.glow)
+      glowMaterial.opacity = RENDER.card.glowAlpha
+      this.materials.push(glowMaterial)
+      const glow = new Mesh(iconGeometry, glowMaterial)
+      glow.position.z = 0.12
+      glow.visible = false
+      this.cardGlows.push(glow)
       this.materials.push(iconMaterial)
       this.cardIconMaterials.push(iconMaterial)
       this.cardTypes.push(null)
-      group.add(ink, back, icon)
+      group.add(ink, back, icon, glow)
       this.cardGroups.push(group)
       this.cardRoot.add(group)
     }
@@ -473,11 +530,8 @@ export class ActorRenderer {
 
   private buildLasers(): void {
     const geometry = new BoxGeometry(LASER_SIZE.width, LASER_SIZE.height, LASER_SIZE.depth)
-    const material = new MeshLambertMaterial({
+    const material = new MeshBasicMaterial({
       color: LASER_COLOUR,
-      emissive: LASER_COLOUR,
-      emissiveIntensity: 1.4,
-      flatShading: true,
     })
     this.geometries.push(geometry)
     this.materials.push(material)
@@ -503,6 +557,12 @@ export class ActorRenderer {
       Math.sin(this.elapsed * RENDER.card.spin + slot) * 0.45,
       0,
     )
+    const glow = this.cardGlows[slot]
+    const colour = hexToInt(PALETTE.powerUp[powerUp.type])
+    ;(glow.material as MeshBasicMaterial).color.setHex(colour)
+    glow.visible = true
+    const pulse = 1 + Math.sin(this.elapsed * 2.2 + slot) * RENDER.card.pulse
+    glow.scale.setScalar(RENDER.card.glowScale * pulse)
   }
 
   /** Swaps the icon texture only when the slot changes power-up type. */
@@ -517,6 +577,7 @@ export class ActorRenderer {
   private releaseSlot(slot: number): void {
     this.slotIds[slot] = NO_SLOT
     this.cardGroups[slot].visible = false
+    this.cardGlows[slot].visible = false
   }
 
   private hasSlot(id: number): boolean {

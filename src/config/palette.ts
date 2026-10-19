@@ -1,56 +1,56 @@
 /**
- * Papercraft / voxel-Mario palette. Strings feed the renderer (converted to
+ * Space / Galaga arcade palette. Strings feed the renderer (converted to
  * integers via hexToInt) and the CSS theme in ui.css mirrors these values.
  */
 export const PALETTE = {
-  ink: '#3a2417',
-  paper: '#fffaf0',
-  paperShadow: '#efd9b8',
-  cardboard: '#e0a05c',
+  ink: '#04081a',
+  paper: '#0b1230',
+  paperShadow: '#060b22',
+  cardboard: '#3d4a7a',
 
-  red: '#ff5a4e',
-  blue: '#3f8cff',
-  green: '#5fc94e',
-  yellow: '#ffd23e',
+  red: '#ff3d5e',
+  blue: '#35c4ff',
+  green: '#4dffa6',
+  yellow: '#ffe14d',
   orange: '#ff9f2e',
   purple: '#a06bff',
   pink: '#ff7ab8',
   teal: '#3fd8e0',
-  crimson: '#e83b4f',
-  stone: '#9aa7b5',
+  crimson: '#ff2e4d',
+  stone: '#8b98b8',
 
-  skyTop: '#5fb8ff',
-  skyMid: '#b8e4ff',
-  skyHorizon: '#ffe9c2',
-  cloud: '#ffffff',
-  checkerRed: '#ff5a4e',
+  skyTop: '#02030c',
+  skyMid: '#070d2b',
+  skyHorizon: '#1b0f4b',
+  cloud: '#8f7bff',
+  checkerRed: '#ff3d5e',
 
-  facade: '#e8d9bd',
-  windowLit: '#ffe3a4',
-  windowDark: '#33415e',
-  metalTrim: '#c9d2da',
-  ground: '#cbb99a',
+  facade: '#0b1230',
+  windowLit: '#7df9ff',
+  windowDark: '#131c44',
+  metalTrim: '#8b98b8',
+  ground: '#070d2b',
 
-  paddle: '#ff5a4e',
-  ball: '#fff6d8',
-  /** Ball flavours: plain cream, ember, brushed steel and dark bomb. */
-  ballTypes: { standard: '#fff6d8', fire: '#ff8c3a', heavy: '#c3cdd8', bomb: '#5a4a6a' },
-  wall: '#fffaf0',
-  wallAccent: '#ff5a4e',
-  guide: '#ffffff',
+  paddle: '#35c4ff',
+  ball: '#d9fbff',
+  /** Ball flavours: ion cyan, solar ember, chrome and reactor magenta. */
+  ballTypes: { standard: '#35e0ff', fire: '#ff8c3a', heavy: '#dfe8ff', bomb: '#ff3df0' },
+  wall: '#35c4ff',
+  wallAccent: '#ff3df0',
+  guide: '#7df9ff',
 
-  brickRows: ['#ff5a4e', '#ff9f2e', '#ffd23e', '#5fc94e', '#3f8cff', '#a06bff'],
-  // Brick materials: painted wooden crates keep the per-row colours; tough bricks
-  // read as sheet metal, indestructible ones as cast concrete and explosives as
-  // hazard-striped crates.
-  brickSpecial: { tough: '#9db0c4', indestructible: '#bdb7aa', explosive: '#e8483b' },
+  brickRows: ['#ff3d5e', '#ff9f2e', '#ffe14d', '#4dffa6', '#35c4ff', '#a06bff'],
+  // Brick materials: hull plating keeps the per-row colours; tough bricks read
+  // as shielded armour, indestructible ones as a station core and explosives
+  // as unstable reactors. All kept luminous so they pop against the dark board.
+  brickSpecial: { tough: '#aebadd', indestructible: '#5a6aa8', explosive: '#ff5a2e' },
   powerUp: {
-    wide: '#3f8cff',
+    wide: '#35c4ff',
     multi: '#a06bff',
-    slow: '#5fc94e',
+    slow: '#4dffa6',
     fast: '#ff9f2e',
-    laser: '#e83b4f',
+    laser: '#ff2e4d',
     life: '#ff7ab8',
-    powerBall: '#2fd0b0',
+    powerBall: '#3fd8e0',
   },
 } as const

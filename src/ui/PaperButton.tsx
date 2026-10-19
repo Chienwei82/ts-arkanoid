@@ -7,7 +7,7 @@ export interface PaperButtonProps {
   readonly pressed?: boolean
 }
 
-/** Card-stock button: it visibly presses into the board when clicked. */
+/** Neon-cabinet button: it glows brighter and dips when pressed. */
 export const PaperButton = ({
   label,
   onClick,

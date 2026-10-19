@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#5fb8ff" />
-    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#070d2b" />
+    <meta name="color-scheme" content="dark" />
     <meta
       name="description"
-      content="Paper Breaker: arkanoid voxel con estética papercraft, three.js y React."
+      content="Star Breaker: arkanoid orbital estilo Galaga con naves, three.js y React."
     />
     <style>
       /* Inlined so the boot/loading screen looks right before any JS or CSS loads. */
@@ -20,8 +20,8 @@
         gap: 0.5rem;
         padding: 1.5rem;
         text-align: center;
-        color: #3a2417;
-        background: linear-gradient(180deg, #5fb8ff 0%, #b8e4ff 48%, #ffe9c2 100%);
+        color: #d9fbff;
+        background: linear-gradient(180deg, #02030c 0%, #070d2b 55%, #1b0f4b 100%);
         font-family: 'Trebuchet MS', system-ui, sans-serif;
       }
 
@@ -29,28 +29,31 @@
         margin: 0;
         font-size: clamp(1.8rem, 5vw, 3rem);
         font-weight: 700;
-        color: #ff5a4e;
-        text-shadow: 0.12rem 0.12rem 0 #3a2417;
+        letter-spacing: 0.08em;
+        color: #fff;
+        text-shadow:
+          0 0 0.7rem #35c4ff,
+          0.12rem 0.12rem 0 #04081a;
       }
 
       .boot__hint {
         margin: 0;
         font-size: clamp(0.85rem, 2vw, 1.05rem);
-        color: #6b4b38;
+        color: rgba(217, 251, 255, 0.75);
       }
     </style>
-    <title>Paper Breaker · Arkanoid voxel de papel</title>
+    <title>Star Breaker · Arkanoid orbital caza-invasores</title>
   </head>
   <body>
     <div id="root">
       <div class="boot">
-        <p class="boot__title">Paper Breaker</p>
-        <p class="boot__hint">Montando el tablero de papel…</p>
+        <p class="boot__title">Star Breaker</p>
+        <p class="boot__hint">Calentando motores…</p>
       </div>
     </div>
     <noscript>
       <div class="boot">
-        <p class="boot__title">Paper Breaker necesita JavaScript</p>
+        <p class="boot__title">Star Breaker necesita JavaScript</p>
         <p class="boot__hint">Activa JavaScript en tu navegador para poder jugar.</p>
       </div>
     </noscript>

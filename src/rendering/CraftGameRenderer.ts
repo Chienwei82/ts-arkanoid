@@ -26,10 +26,12 @@ import { ExplosionWaves } from './ExplosionWaves'
 import { PostFX } from './PostFX'
 import { SceneBuilder } from './SceneBuilder'
 import { ScreenShake } from './ScreenShake'
+import { SparkSystem } from './SparkSystem'
 import { primaryPowerUp } from './cues'
 import { CraftTextures } from './textures'
 
 const CONFETTI = { brick: 22, chain: 11, damaged: 5, pickup: 12, celebration: 40 }
+const SPARKS = { brick: 10, damaged: 4, pickup: 14, laser: 5 }
 const CELEBRATION_BURSTS = 3
 const CELEBRATION_INTERVAL = 0.35
 const TRAUMA = {
@@ -45,16 +47,16 @@ const TRAUMA = {
   gameOver: 0.9,
 }
 const CELEBRATION_COLOURS: readonly number[] = [
-  PALETTE.red,
-  PALETTE.orange,
-  PALETTE.yellow,
-  PALETTE.green,
   PALETTE.blue,
+  PALETTE.teal,
   PALETTE.purple,
   PALETTE.pink,
-  PALETTE.teal,
+  PALETTE.green,
+  PALETTE.yellow,
+  PALETTE.orange,
+  PALETTE.red,
 ].map((hex) => hexToInt(hex))
-const EXPOSURE = 1.05
+const EXPOSURE = 1.1
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 /** Confetti kept when the visitor asks for reduced motion. */
@@ -81,6 +83,7 @@ export class CraftGameRenderer implements GameRenderer {
   private readonly confetti: ConfettiSystem
   private readonly waves: ExplosionWaves
   private readonly trail: BallTrail
+  private readonly sparks: SparkSystem
   private readonly postFX: PostFX
   private readonly shake = new ScreenShake()
   private readonly raycaster = new Raycaster()
@@ -127,12 +130,14 @@ export class CraftGameRenderer implements GameRenderer {
     this.confetti = new ConfettiSystem(this.textures.brickPaper)
     this.waves = new ExplosionWaves()
     this.trail = new BallTrail(this.textures.glow)
+    this.sparks = new SparkSystem(this.textures.glow)
     this.sceneBuilder.board.add(
       this.bricks.object,
       this.actors.object,
       this.confetti.object,
       this.waves.object,
       this.trail.object,
+      this.sparks.object,
     )
 
     this.postFX = new PostFX(this.renderer, this.scene, this.camera, quality.bloom)
@@ -160,6 +165,7 @@ export class CraftGameRenderer implements GameRenderer {
       this.confetti.clear()
       this.waves.clear()
       this.trail.clear()
+      this.sparks.clear()
     }
     this.bricks.sync()
     this.actors.sync(world, alpha)
@@ -176,6 +182,7 @@ export class CraftGameRenderer implements GameRenderer {
     this.confetti.update(dt)
     this.waves.update(dt)
     this.trail.update(dt, this.trailActive)
+    this.sparks.update(dt)
     this.updateIntro(dt)
     this.updateCelebration(dt)
   }
@@ -216,6 +223,7 @@ export class CraftGameRenderer implements GameRenderer {
     this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored)
     this.motionQuery?.removeEventListener('change', this.applyMotionPreference)
     this.trail.dispose()
+    this.sparks.dispose()
     this.waves.dispose()
     this.confetti.dispose()
     this.actors.dispose()
@@ -239,6 +247,13 @@ export class CraftGameRenderer implements GameRenderer {
           color,
           this.effectCount(chain ? CONFETTI.chain : CONFETTI.brick),
         )
+        this.sparks.burst(
+          pos.x,
+          pos.y,
+          RENDER.depth.confetti,
+          color,
+          this.effectCount(SPARKS.brick),
+        )
         this.addTrauma(chain ? TRAUMA.chain : TRAUMA.brick)
         if (type === 'explosive') {
           this.waves.spawn(pos.x, pos.y, RENDER.depth.brick + 1, color)
@@ -253,6 +268,13 @@ export class CraftGameRenderer implements GameRenderer {
           color,
           this.effectCount(CONFETTI.damaged),
         )
+        this.sparks.burst(
+          pos.x,
+          pos.y,
+          RENDER.depth.confetti,
+          color,
+          this.effectCount(SPARKS.damaged),
+        )
         this.addTrauma(TRAUMA.damaged)
       }),
       this.bus.on('paddleHit', ({ strength }) => {
@@ -264,10 +286,12 @@ export class CraftGameRenderer implements GameRenderer {
       }),
       this.bus.on('laserFired', () => {
         this.addTrauma(TRAUMA.laser)
+        this.burstSparksOnPaddle(hexToInt(PALETTE.powerUp.laser), SPARKS.laser)
       }),
       this.bus.on('powerUpCollected', ({ type }) => {
         this.addTrauma(TRAUMA.collect)
         this.burstOnPaddle(hexToInt(PALETTE.powerUp[type]))
+        this.burstSparksOnPaddle(hexToInt(PALETTE.powerUp[type]), SPARKS.pickup)
       }),
       this.bus.on('powerUpsChanged', ({ active }) => {
         this.actors.setCueType(primaryPowerUp(active))
@@ -351,6 +375,18 @@ export class CraftGameRenderer implements GameRenderer {
       RENDER.depth.confetti,
       colour,
       CONFETTI.pickup,
+    )
+  }
+
+  private burstSparksOnPaddle(colour: number, count: number): void {
+    const world = this.world
+    if (world === null) return
+    this.sparks.burst(
+      world.paddle.pos.x,
+      world.paddle.pos.y + world.paddle.halfHeight,
+      RENDER.depth.confetti,
+      colour,
+      count,
     )
   }
 

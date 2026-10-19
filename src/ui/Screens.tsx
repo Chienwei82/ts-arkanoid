@@ -19,13 +19,13 @@ interface ErrorScreenProps {
 }
 
 const CONTROLS: readonly string[] = [
-  'Ratón, dedo o ← → / A D para mover la paleta',
+  'Ratón, dedo o ← → / A D para pilotar la nave',
   'Clic, toque o ESPACIO para lanzar',
   'ESC o P para pausar',
-  'H para abrir o cerrar la guía de power-ups y bloques',
+  'H para abrir o cerrar la guía de módulos y cascos',
 ]
 
-/** Paper toggle for the procedural sound (music and effects share it). */
+/** Arcade toggle for the procedural sound (music and effects share it). */
 const SoundToggle = ({
   hud,
   session,
@@ -60,7 +60,7 @@ export const EngineErrorScreen = ({ hud, session }: ErrorScreenProps) => {
   )
 }
 
-/** Full-screen paper panels for every non-playing game state and the guide. */
+/** Full-screen neon panels for every non-playing game state and the guide. */
 export const Screens = ({ hud, session, scheme, onSchemeChange }: ScreensProps) => {
   if (hud.error !== null) return <EngineErrorScreen hud={hud} session={session} />
   if (hud.helpVisible) return <HelpScreen hud={hud} session={session} />
@@ -71,8 +71,8 @@ export const Screens = ({ hud, session, scheme, onSchemeChange }: ScreensProps) 
       <div className="panel" role="dialog" aria-modal="true">
         {hud.status === 'menu' && (
           <>
-            <h1 className="panel__title">Paper Breaker</h1>
-            <p className="panel__tag">Arkanoid voxel recortado en papel</p>
+            <h1 className="panel__title">Star Breaker</h1>
+            <p className="panel__tag">Arkanoid orbital caza-invasores</p>
             <p className="panel__meta">
               Récord <strong>{formatScore(hud.record)}</strong> · {hud.levelTotal} niveles
             </p>

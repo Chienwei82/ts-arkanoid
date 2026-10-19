@@ -115,7 +115,7 @@ describe('Screens', () => {
     const stub = createStub(() => MENU_HUD)
     renderScreens(MENU_HUD, stub)
 
-    expect(screen.getByText('Paper Breaker')).not.toBeNull()
+    expect(screen.getByText('Star Breaker')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'JUGAR' }))
     expect(stub.calls).toContain('start')
   })
@@ -189,8 +189,8 @@ describe('HelpScreen', () => {
     const stub = createStub(() => MENU_HUD)
     renderScreens({ ...MENU_HUD, helpVisible: true }, stub)
 
-    expect(screen.getByText('Guía de juego')).not.toBeNull()
-    expect(screen.queryByText('Paper Breaker')).toBeNull()
+    expect(screen.getByText('Guía de vuelo')).not.toBeNull()
+    expect(screen.queryByText('Star Breaker')).toBeNull()
   })
 
   it('explains every power-up and brick type', () => {
@@ -300,7 +300,7 @@ describe('module wiring', () => {
     renderScreens({ ...MENU_HUD, error: { kind: 'context', message: 'Contexto perdido' } }, stub)
 
     expect(screen.getByText('Contexto perdido')).not.toBeNull()
-    expect(screen.queryByText('Paper Breaker')).toBeNull()
+    expect(screen.queryByText('Star Breaker')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'RECARGAR' }))
     expect(stub.calls).toEqual(['reload'])
   })

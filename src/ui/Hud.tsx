@@ -6,7 +6,7 @@ interface HudProps {
   readonly hud: HudState
 }
 
-/** Paper HUD: score, record, level chip, hearts and running power-up cards. */
+/** Neon HUD: score, record, level chip, shield hearts and running modules. */
 export const Hud = ({ hud }: HudProps) => (
   <header className="hud">
     <section className="hud__stack">

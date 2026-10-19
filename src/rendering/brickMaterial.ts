@@ -1,8 +1,8 @@
 import type { BrickType } from '../entities/types'
 
 /**
- * Material families that dress the brick field: painted wooden crates, sheet
- * metal, cast concrete and hazard-striped explosive crates.
+ * Material families that dress the brick field: hull plating, shielded armour,
+ * station core and volatile reactor cells.
  */
 export type BrickMaterial = 'wood' | 'metal' | 'concrete' | 'explosive'
 

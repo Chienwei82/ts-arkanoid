@@ -15,14 +15,15 @@ const VERTEX_SHADER = /* glsl */ `
 `
 
 /**
- * Vignette plus paper grain. Chromatic aberration belongs to a neon look, so the
- * grade pass reinforces the craft material instead: darkened deckled edges and a
- * faint printed-texture noise, both applied before tone mapping.
+ * Vignette plus signal grain. The grade pass reinforces the arcade cabinet:
+ * darkened deckled edges, faint scanlines and a whisper of static, all applied
+ * before tone mapping.
  */
 const FRAGMENT_SHADER = /* glsl */ `
   uniform sampler2D tDiffuse;
   uniform float vignette;
   uniform float grain;
+  uniform float scanlines;
   uniform vec2 resolution;
   uniform float time;
   varying vec2 vUv;
@@ -36,6 +37,8 @@ const FRAGMENT_SHADER = /* glsl */ `
     float radius = length(vUv - 0.5) * 1.41421356;
     float vig = smoothstep(1.0, 0.35, radius);
     colour.rgb *= mix(1.0 - vignette, 1.0, vig);
+    float scan = 1.0 - scanlines * (0.5 + 0.5 * sin(vUv.y * resolution.y * 3.14159));
+    colour.rgb *= scan;
     colour.rgb += (hash(vUv * resolution + time) - 0.5) * grain;
     gl_FragColor = colour;
   }
@@ -45,6 +48,7 @@ interface GradeUniforms {
   tDiffuse: { value: Texture | null }
   vignette: { value: number }
   grain: { value: number }
+  scanlines: { value: number }
   resolution: { value: Vector2 }
   time: { value: number }
 }
@@ -61,6 +65,7 @@ export class PostFX {
       tDiffuse: { value: null },
       vignette: { value: RENDER.vignette },
       grain: { value: RENDER.grain },
+      scanlines: { value: RENDER.scanlines },
       resolution: { value: new Vector2(1, 1) },
       time: { value: 0 },
     }
