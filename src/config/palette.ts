@@ -42,8 +42,8 @@ export const PALETTE = {
   brickRows: ['#ff3d5e', '#ff9f2e', '#ffe14d', '#4dffa6', '#35c4ff', '#a06bff'],
   // Brick materials: hull plating keeps the per-row colours; tough bricks read
   // as shielded armour, indestructible ones as a station core and explosives
-  // as unstable reactors.
-  brickSpecial: { tough: '#7d8db5', indestructible: '#2a3358', explosive: '#ff5a2e' },
+  // as unstable reactors. All kept luminous so they pop against the dark board.
+  brickSpecial: { tough: '#aebadd', indestructible: '#5a6aa8', explosive: '#ff5a2e' },
   powerUp: {
     wide: '#35c4ff',
     multi: '#a06bff',

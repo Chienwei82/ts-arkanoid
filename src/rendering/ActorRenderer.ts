@@ -65,13 +65,15 @@ export class ActorRenderer {
   private readonly ballRoot = new Group()
   private readonly ballInk: Mesh[] = []
   private readonly ballBodies: Mesh[] = []
-  private readonly ballMaterials: MeshBasicMaterial[] = []
+  private readonly ballCores: Mesh[] = []
+  private readonly ballMaterials: MeshStandardMaterial[] = []
   private readonly ballTypes: (BallType | null)[] = []
   private readonly ballLight: PointLight
 
   private readonly cardRoot = new Group()
   private readonly cardGroups: Group[] = []
   private readonly cardIconMaterials: MeshBasicMaterial[] = []
+  private readonly cardGlows: Mesh[] = []
   private readonly cardTypes: (PowerUpType | null)[] = []
   private readonly slotIds: Int32Array
 
@@ -442,12 +444,20 @@ export class ActorRenderer {
   private buildBalls(): void {
     const geometry = new IcosahedronGeometry(BALL.radius, 1)
     this.geometries.push(geometry)
+    const coreGeometry = new IcosahedronGeometry(BALL.radius * 0.52, 1)
+    this.geometries.push(coreGeometry)
     const inkMaterial = createOutlineMaterial()
     this.materials.push(inkMaterial)
     for (let index = 0; index < BALL.maxCount; index += 1) {
-      // Each slot owns its material so the plasma colour can change per ball.
-      const bodyMaterial = new MeshBasicMaterial({
+      // Lit body keeps its shape under bloom instead of washing out to white;
+      // a small bright core gives the ball its glowing heart.
+      const bodyMaterial = new MeshStandardMaterial({
         color: BALL_COLOUR,
+        emissive: BALL_COLOUR,
+        emissiveIntensity: RENDER.ballGlow,
+        metalness: 0.35,
+        roughness: 0.45,
+        flatShading: true,
       })
       this.materials.push(bodyMaterial)
       this.ballMaterials.push(bodyMaterial)
@@ -457,10 +467,16 @@ export class ActorRenderer {
       ink.visible = false
       const body = new Mesh(geometry, bodyMaterial)
       body.visible = false
+      const coreMaterial = new MeshBasicMaterial({ color: 0xffffff })
+      this.materials.push(coreMaterial)
+      const core = new Mesh(coreGeometry, coreMaterial)
+      core.visible = false
       this.ballInk.push(ink)
       this.ballBodies.push(body)
+      this.ballCores.push(core)
       this.ballRoot.add(ink)
       this.ballRoot.add(body)
+      this.ballRoot.add(core)
     }
   }
 
@@ -471,6 +487,9 @@ export class ActorRenderer {
     const colour = BALL_TYPE_COLOURS[type]
     const material = this.ballMaterials[index]
     material.color.setHex(colour)
+    material.emissive.setHex(colour)
+    const core = this.ballCores[index]
+    ;(core.material as MeshBasicMaterial).color.setHex(0xffffff)
   }
 
   private buildCards(): void {
@@ -492,10 +511,18 @@ export class ActorRenderer {
       const iconMaterial = new MeshBasicMaterial({ transparent: true, alphaTest: 0.15 })
       const icon = new Mesh(iconGeometry, iconMaterial)
       icon.position.z = 0.12
+      // Additive halo behind the icon so a falling power-up reads at a glance.
+      const glowMaterial = createGlowMaterial(this.textures.glow)
+      glowMaterial.opacity = RENDER.card.glowAlpha
+      this.materials.push(glowMaterial)
+      const glow = new Mesh(iconGeometry, glowMaterial)
+      glow.position.z = 0.12
+      glow.visible = false
+      this.cardGlows.push(glow)
       this.materials.push(iconMaterial)
       this.cardIconMaterials.push(iconMaterial)
       this.cardTypes.push(null)
-      group.add(ink, back, icon)
+      group.add(ink, back, icon, glow)
       this.cardGroups.push(group)
       this.cardRoot.add(group)
     }
@@ -530,6 +557,12 @@ export class ActorRenderer {
       Math.sin(this.elapsed * RENDER.card.spin + slot) * 0.45,
       0,
     )
+    const glow = this.cardGlows[slot]
+    const colour = hexToInt(PALETTE.powerUp[powerUp.type])
+    ;(glow.material as MeshBasicMaterial).color.setHex(colour)
+    glow.visible = true
+    const pulse = 1 + Math.sin(this.elapsed * 2.2 + slot) * RENDER.card.pulse
+    glow.scale.setScalar(RENDER.card.glowScale * pulse)
   }
 
   /** Swaps the icon texture only when the slot changes power-up type. */
@@ -544,6 +577,7 @@ export class ActorRenderer {
   private releaseSlot(slot: number): void {
     this.slotIds[slot] = NO_SLOT
     this.cardGroups[slot].visible = false
+    this.cardGlows[slot].visible = false
   }
 
   private hasSlot(id: number): boolean {

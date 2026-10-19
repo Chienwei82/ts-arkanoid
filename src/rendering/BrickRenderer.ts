@@ -7,14 +7,13 @@ import {
   InstancedMesh,
   Matrix4,
   type MeshBasicMaterial,
-  type MeshLambertMaterial,
   Quaternion,
   Vector3,
 } from 'three'
 import { BRICK, RENDER } from '../config/gameConfig'
 import type { Brick } from '../entities/types'
 import { brickMaterialFor, type BrickMaterial } from './brickMaterial'
-import { createInkMaterial, createPaperMaterial, createTintablePaperMaterial } from './materials'
+import { createFrameMaterial, createInkMaterial, createVividBodyMaterial } from './materials'
 import type { CraftTextures } from './textures'
 
 const BODY_LAYER = 2
@@ -47,8 +46,8 @@ interface MaterialGroup {
   readonly layers: InstancedMesh[]
   readonly geometry: BoxGeometry
   readonly ink: MeshBasicMaterial
-  readonly paper: MeshLambertMaterial
-  readonly body: MeshLambertMaterial
+  readonly paper: MeshBasicMaterial
+  readonly body: MeshBasicMaterial
 }
 
 interface BrickSize {
@@ -81,6 +80,7 @@ export class BrickRenderer {
   private groupIndex = new Int32Array(0)
   private slotIndex = new Int32Array(0)
   private colourDirty = false
+  private elapsed = 0
 
   constructor(textures: CraftTextures) {
     this.textures = textures
@@ -159,15 +159,16 @@ export class BrickRenderer {
     this.flushColours()
   }
 
-  /** Advances pulses and shatter animations for the bricks in motion. */
+  /** Advances pulses, shatter animations and the gentle idle breathing. */
   animate(dt: number): void {
     if (this.bricks.length === 0) return
     let matricesChanged = false
+    this.elapsed += dt
 
     for (let index = 0; index < this.bricks.length; index += 1) {
       const visual = this.visuals[index]
-      if (visual.hit <= 0 && visual.dying <= 0) continue
       const brick = this.bricks[index]
+      if (!brick.alive && visual.dying <= 0 && visual.hit <= 0) continue
 
       if (visual.dying > 0) {
         visual.dying -= dt
@@ -187,6 +188,7 @@ export class BrickRenderer {
       }
 
       // writeColour flags the colour buffer; matrices are flushed once below.
+      // Idle bricks also breathe so the wall never looks frozen.
       this.writeBrick(index, brick, visual)
       matricesChanged = true
     }
@@ -206,8 +208,10 @@ export class BrickRenderer {
     const geometry = new BoxGeometry(size.width, size.height, BRICK.depth)
     const texture = this.textures.brickMaterials[material]
     const ink = createInkMaterial()
-    const paper = createPaperMaterial(texture)
-    const body = createTintablePaperMaterial(texture)
+    // Unlit frame + vivid body: the wall keeps saturated arcade colours no
+    // matter where the scene lights point.
+    const paper = createFrameMaterial(texture)
+    const body = createVividBodyMaterial(texture)
     const layers: InstancedMesh[] = []
     for (const layerMaterial of [ink, paper, body]) {
       const layer = new InstancedMesh(geometry, layerMaterial, count)
@@ -220,7 +224,7 @@ export class BrickRenderer {
   }
 
   private writeBrick(index: number, brick: Brick, visual: BrickVisual): void {
-    let uniform = 1
+    let uniform: number
     let stretch = 1
     let rise = 0
     let pop = 0
@@ -241,7 +245,14 @@ export class BrickRenderer {
       pop = RENDER.brickHit.pop * pulse
       this.writeColour(index, brick, pulse)
     } else {
-      this.writeColour(index, brick, 0)
+      // Idle breathing: a slow swell plus a faster neon pulse on explosives.
+      const breathe = Math.sin(this.elapsed * RENDER.brickIdle.speed + index * 0.55)
+      uniform = 1 + RENDER.brickIdle.scale * (0.5 + 0.5 * breathe)
+      const glowPulse =
+        brick.type === 'explosive'
+          ? 0.5 + 0.5 * Math.sin(this.elapsed * RENDER.brickIdle.explosiveSpeed + index)
+          : 0
+      this.writeColour(index, brick, glowPulse * RENDER.brickIdle.explosivePulse)
     }
 
     const group = this.groups[this.groupIndex[index]]

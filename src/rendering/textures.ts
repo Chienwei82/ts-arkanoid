@@ -145,15 +145,15 @@ const paintChecker = (): CanvasTexture => {
   return toTexture(canvas, [1, 1])
 }
 
-/** Station-core plating: dark grains, panel seams and a few energy cracks. */
+/** Station-core plating: bright grains, panel seams and energy cracks. */
 const paintConcrete = (): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
-    ctx.fillStyle = '#232c52'
+    ctx.fillStyle = '#dbe1f4'
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
     for (let i = 0; i < 700; i += 1) {
-      ctx.fillStyle = Math.random() > 0.5 ? 'rgba(4, 8, 26, 0.24)' : 'rgba(125, 249, 255, 0.1)'
+      ctx.fillStyle = Math.random() > 0.5 ? 'rgba(40, 55, 120, 0.16)' : 'rgba(255, 255, 255, 0.5)'
       ctx.fillRect(
         Math.random() * FIBER_SIZE,
         Math.random() * FIBER_SIZE,
@@ -161,7 +161,13 @@ const paintConcrete = (): CanvasTexture => {
         Math.random() * 3 + 0.5,
       )
     }
-    ctx.strokeStyle = 'rgba(125, 249, 255, 0.4)'
+    // Luminous top edge + dark seams keep the core readable at distance.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)'
+    ctx.fillRect(0, 0, FIBER_SIZE, 8)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+    ctx.lineWidth = 5
+    ctx.strokeRect(3, 3, FIBER_SIZE - 6, FIBER_SIZE - 6)
+    ctx.strokeStyle = 'rgba(35, 55, 130, 0.55)'
     ctx.lineWidth = 2
     for (let crack = 0; crack < 3; crack += 1) {
       let x = Math.random() * FIBER_SIZE
@@ -179,24 +185,38 @@ const paintConcrete = (): CanvasTexture => {
   return toTexture(canvas, [1, 1])
 }
 
-/** Hull plating: dark alloy with seams and a faint brushed streak pass. */
+/** Hull plating: bright alloy with seams so instance tints stay vivid. */
 const paintPlanks = (): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
-    ctx.fillStyle = '#1a2450'
+    ctx.fillStyle = '#c9d4f5'
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
     const planks = 3
     const step = FIBER_SIZE / planks
-    ctx.strokeStyle = 'rgba(125, 249, 255, 0.28)'
-    ctx.lineWidth = 3
+    // Soft vertical shading per plank for volume.
+    for (let p = 0; p < planks; p += 1) {
+      const shade = ctx.createLinearGradient(0, p * step, 0, (p + 1) * step)
+      shade.addColorStop(0, 'rgba(255, 255, 255, 0.35)')
+      shade.addColorStop(1, 'rgba(20, 30, 80, 0.22)')
+      ctx.fillStyle = shade
+      ctx.fillRect(0, p * step, FIBER_SIZE, step)
+    }
+    ctx.strokeStyle = 'rgba(10, 16, 50, 0.55)'
+    ctx.lineWidth = 4
     for (let i = 1; i < planks; i += 1) {
       ctx.beginPath()
       ctx.moveTo(0, i * step)
       ctx.lineTo(FIBER_SIZE, i * step)
       ctx.stroke()
     }
-    ctx.strokeStyle = 'rgba(125, 249, 255, 0.12)'
+    // Neon top bevel: catches the eye even at a distance.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)'
+    ctx.fillRect(0, 0, FIBER_SIZE, 7)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+    ctx.lineWidth = 5
+    ctx.strokeRect(3, 3, FIBER_SIZE - 6, FIBER_SIZE - 6)
+    ctx.strokeStyle = 'rgba(90, 140, 255, 0.35)'
     ctx.lineWidth = 1
     for (let i = 0; i < 26; i += 1) {
       const x = Math.random() * FIBER_SIZE
@@ -210,14 +230,14 @@ const paintPlanks = (): CanvasTexture => {
   return toTexture(canvas, [1, 1])
 }
 
-/** Shielded armour: dark brushed plating, an inset energy border and bolts. */
+/** Shielded armour: bright plating, energy border and corner bolts. */
 const paintMetalPanel = (): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
-    ctx.fillStyle = '#2b3a6e'
+    ctx.fillStyle = '#d5dcf2'
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
-    ctx.strokeStyle = 'rgba(125, 249, 255, 0.14)'
+    ctx.strokeStyle = 'rgba(40, 60, 130, 0.25)'
     ctx.lineWidth = 1
     for (let i = 0; i < 60; i += 1) {
       const y = Math.random() * FIBER_SIZE
@@ -226,41 +246,66 @@ const paintMetalPanel = (): CanvasTexture => {
       ctx.lineTo(FIBER_SIZE, y + (Math.random() - 0.5) * 2)
       ctx.stroke()
     }
-    ctx.strokeStyle = 'rgba(125, 249, 255, 0.45)'
+    // Bright inset frame so tough bricks read as armoured shells.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)'
+    ctx.fillRect(0, 0, FIBER_SIZE, 10)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)'
+    ctx.lineWidth = 6
+    ctx.strokeRect(7, 7, FIBER_SIZE - 14, FIBER_SIZE - 14)
+    ctx.strokeStyle = 'rgba(30, 50, 120, 0.6)'
     ctx.lineWidth = 3
-    ctx.strokeRect(10, 10, FIBER_SIZE - 20, FIBER_SIZE - 20)
-    ctx.fillStyle = 'rgba(217, 251, 255, 0.85)'
+    ctx.strokeRect(14, 14, FIBER_SIZE - 28, FIBER_SIZE - 28)
+    ctx.fillStyle = 'rgba(30, 50, 120, 0.9)'
     const rivets: readonly (readonly [number, number])[] = [
-      [18, 18],
-      [FIBER_SIZE - 18, 18],
-      [18, FIBER_SIZE - 18],
-      [FIBER_SIZE - 18, FIBER_SIZE - 18],
+      [20, 20],
+      [FIBER_SIZE - 20, 20],
+      [20, FIBER_SIZE - 20],
+      [FIBER_SIZE - 20, FIBER_SIZE - 20],
     ]
     for (const [x, y] of rivets) {
       ctx.beginPath()
-      ctx.arc(x, y, 5, 0, Math.PI * 2)
+      ctx.arc(x, y, 6, 0, Math.PI * 2)
       ctx.fill()
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+      ctx.beginPath()
+      ctx.arc(x - 1.5, y - 1.5, 2, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = 'rgba(30, 50, 120, 0.9)'
     }
   }
   return toTexture(canvas, [1, 1])
 }
 
-/** Reactor cell: dark hull with glowing diagonal conduits (volatile cargo). */
+/** Reactor cell: bright hull with glowing chevrons (volatile cargo). */
 const paintHazard = (): CanvasTexture => {
   const canvas = createCanvas(FIBER_SIZE)
   const ctx = canvas.getContext('2d')
   if (ctx !== null) {
-    ctx.fillStyle = '#241031'
+    ctx.fillStyle = '#f3c8b8'
     ctx.fillRect(0, 0, FIBER_SIZE, FIBER_SIZE)
-    ctx.strokeStyle = 'rgba(255, 90, 46, 0.85)'
-    ctx.lineWidth = 12
-    const step = 30
+    // Bright chevron bands alternate with the instance tint.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+    const step = 32
+    for (let x = -FIBER_SIZE; x < FIBER_SIZE * 2; x += step * 2) {
+      ctx.beginPath()
+      ctx.moveTo(x, FIBER_SIZE)
+      ctx.lineTo(x + FIBER_SIZE / 2, 0)
+      ctx.lineTo(x + FIBER_SIZE / 2 + 16, 0)
+      ctx.lineTo(x + 16, FIBER_SIZE)
+      ctx.closePath()
+      ctx.fill()
+    }
+    ctx.strokeStyle = 'rgba(120, 20, 20, 0.55)'
+    ctx.lineWidth = 4
     for (let x = -FIBER_SIZE; x < FIBER_SIZE * 2; x += step * 2) {
       ctx.beginPath()
       ctx.moveTo(x, FIBER_SIZE)
       ctx.lineTo(x + FIBER_SIZE, 0)
       ctx.stroke()
     }
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)'
+    ctx.lineWidth = 6
+    ctx.strokeRect(3, 3, FIBER_SIZE - 6, FIBER_SIZE - 6)
   }
   return toTexture(canvas, [1, 1])
 }
