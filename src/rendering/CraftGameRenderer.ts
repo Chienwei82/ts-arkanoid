@@ -255,6 +255,7 @@ export class CraftGameRenderer implements GameRenderer {
           this.effectCount(SPARKS.brick),
         )
         this.addTrauma(chain ? TRAUMA.chain : TRAUMA.brick)
+        this.sceneBuilder.flashGalaxy(chain ? 1.2 : 0.7)
         if (type === 'explosive') {
           this.waves.spawn(pos.x, pos.y, RENDER.depth.brick + 1, color)
           this.addTrauma(TRAUMA.chain)
@@ -276,6 +277,7 @@ export class CraftGameRenderer implements GameRenderer {
           this.effectCount(SPARKS.damaged),
         )
         this.addTrauma(TRAUMA.damaged)
+        this.sceneBuilder.flashGalaxy(0.35)
       }),
       this.bus.on('paddleHit', ({ strength }) => {
         this.actors.pulsePaddle()

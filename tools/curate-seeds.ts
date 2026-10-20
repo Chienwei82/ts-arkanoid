@@ -34,7 +34,9 @@ function loadableSource(path: string): string {
 
 const tmp = '/tmp/arkanoid-curate'
 writeFileSync(tmp + '-constants.ts', loadableSource('src/audio/musicConstants.ts'))
-writeFileSync(tmp + '-rng.ts', loadableSource('src/audio/musicRng.ts'))
+// The RNG lives in `utils/rng` and `audio/musicRng` only re-exports it, so the
+// tool copies the real implementation (not the re-export) to /tmp.
+writeFileSync(tmp + '-rng.ts', loadableSource('src/utils/rng.ts'))
 writeFileSync(
   tmp + '-patterns.ts',
   loadableSource('src/audio/musicPatterns.ts')

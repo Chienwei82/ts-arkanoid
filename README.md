@@ -136,12 +136,14 @@ src/
   platform/    entorno navegador: ViewportManager (resize/orientación/visualViewport),
                DeviceDetector (con nivel de confianza) y ControlScheme (elección persistida)
   levels/      definiciones de nivel como datos + validación y cálculo de la cuadrícula
-  audio/       RNG por semilla, patrones musicales, medidor de intensidad y preferencias
+  audio/       patrones musicales, medidor de intensidad y preferencias
                (puros, testables en Node) + MusicEngine/MusicDirector/SoundFX/AudioDirector
-               (WebAudio; implementan el contrato GameAudio)
+               (WebAudio; implementan el contrato GameAudio). El RNG vive en `utils/rng`
   rendering/   escena papercraft: SceneBuilder, BrickRenderer, ActorRenderer,
                ConfettiSystem, BallTrail, ExplosionWaves, ScreenShake, PostFX,
-               texturas generadas por canvas y CraftGameRenderer (implementa GameRenderer)
+               GalaxyBackdrop (fondo galáctico procedural) + `galaxy.ts` (su layout
+               determinista), texturas generadas por canvas y CraftGameRenderer
+               (implementa GameRenderer)
   bridge/      GameFacade + GameSession (store externo que consume React)
   ui/          componentes React (HUD, paneles, controles táctiles) y su CSS
 tests/         pruebas unitarias de física, colisiones, puntuación, estados, niveles,
@@ -182,6 +184,13 @@ controles) y a `audio/`, que tampoco conocen three ni React. El motor sólo ve d
 - **Factory**: `createBricks` y `createPowerUp`/`rollPowerUpType` construyen entidades a partir
   de los datos de nivel; añadir un nivel nuevo no toca lógica.
 - **Object Pool** (`utils/ObjectPool`): power-ups, bolts de láser y las 600 piezas de confeti.
+- **RNG determinista compartido** (`utils/rng`): `mulberry32` + `hashSeed` alimentan tanto la
+  música procedural (`audio/musicRng` sólo reexporta) como el fondo galáctico, de modo que una
+  semilla reproduce siempre el mismo cielo. `rendering/galaxy.ts` es **puro** (sin three.js ni
+  DOM): describe brazos, espinas, estrellas, nebulosas, carriles de polvo y núcleo, y
+  `rendering/GalaxyBackdrop.ts` lo convierte en geometría (cintas fusionadas + `InstancedMesh`
+  para las estrellas, ~12 draw calls). El fondo se registra en `SceneBuilder`, que lo actualiza
+  y libera junto con el resto de la escena.
 - **Command + input abstraction** (`systems/commands.ts`, `InputManager`, `InputDispatcher`):
   teclado, puntero, táctil y `visibilitychange` se traducen a comandos reutilizados.
 - **Inyección de dependencias por constructor**: `Game` recibe `storage`, `bus`, `levels`, la

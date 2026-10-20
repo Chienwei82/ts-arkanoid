@@ -8,6 +8,29 @@ import {
   resolveCircleBox,
 } from '../src/utils/collision'
 import { clamp, copyVec, hexToInt, lerp, setVec, vec2, vecDistance } from '../src/utils/math'
+import { randomInt, randomPick, randomRange } from '../src/utils/rng'
+
+describe('random helpers', () => {
+  it('draws floats inside the requested range', () => {
+    const rng = () => 0.5
+    expect(randomRange(rng, 2, 4)).toBe(3)
+  })
+
+  it('draws integers inside the closed range', () => {
+    const rng = () => 0.99
+    expect(randomInt(rng, 1, 6)).toBe(6)
+    expect(randomInt(() => 0, 1, 6)).toBe(1)
+  })
+
+  it('picks an item from a non-empty list', () => {
+    const items = ['a', 'b', 'c'] as const
+    expect(items).toContain(randomPick(() => 0.5, items))
+  })
+
+  it('refuses to pick from an empty list', () => {
+    expect(() => randomPick(() => 0, [])).toThrow(/empty list/)
+  })
+})
 
 describe('math helpers', () => {
   it('clamps values into the given range', () => {

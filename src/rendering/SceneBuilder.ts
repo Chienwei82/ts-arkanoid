@@ -18,6 +18,7 @@ import {
   Vector3,
   type BufferGeometry,
   type Material,
+  type MeshBasicMaterial,
   type Scene,
 } from 'three'
 import { BRICK, FIELD, RENDER } from '../config/gameConfig'
@@ -33,6 +34,7 @@ import {
 } from './materials'
 import type { CraftTextures } from './textures'
 import { createPylonGeometry } from './props'
+import { GalaxyBackdrop } from './GalaxyBackdrop'
 
 const PLANET_DISTANCE = RENDER.space.planet.distance
 const PLANET_SIZE = RENDER.space.planet.size
@@ -77,10 +79,17 @@ export class SceneBuilder {
   private readonly textures: CraftTextures
   private readonly geometries: BufferGeometry[] = []
   private readonly materials: Material[] = []
+  private readonly galaxy: GalaxyBackdrop
   private readonly cloudDrift: Drifter[] = []
   private readonly tumblers: Tumbler[] = []
   private readonly windowLit: boolean[] = []
   private readonly windowPhase: number[] = []
+  private planet: Mesh | null = null
+  private planetGlow: MeshBasicMaterial | null = null
+  private planetRing: Mesh | null = null
+  private planetBaseY = 0
+  private conduitGlow: MeshBasicMaterial | null = null
+  private conduitBaseOpacity = 0.5
   private readonly clouds: InstancedMesh
   private readonly windows: InstancedMesh
   private readonly blocks: InstancedMesh
@@ -92,6 +101,7 @@ export class SceneBuilder {
   private readonly scale = new Vector3()
   private readonly colour = new Color()
   private elapsed = 0
+  private lastDt = 0
   private flickerTimer = 0
 
   constructor(scene: Scene, textures: CraftTextures) {
@@ -102,6 +112,8 @@ export class SceneBuilder {
     this.buildGround()
     this.buildLights()
     this.buildPlanet()
+    this.galaxy = new GalaxyBackdrop(this.textures)
+    this.stage.add(this.galaxy.object)
     this.clouds = this.buildStars()
     this.windows = this.buildPylons()
     this.buildPipes()
@@ -114,14 +126,51 @@ export class SceneBuilder {
     this.spinBlocks()
   }
 
+  /** Floating ringed planet: bobs gently while its ring slowly turns. */
+  private animatePlanet(): void {
+    const planet = this.planet
+    const ring = this.planetRing
+    const glow = this.planetGlow
+    if (planet === null || ring === null || glow === null) return
+    const bob = Math.sin(this.elapsed * RENDER.space.planet.bobSpeed) * RENDER.space.planet.bob
+    planet.position.y = this.planetBaseY + bob
+    ring.position.y = this.planetBaseY + bob
+    ring.rotation.z += RENDER.space.planet.ringSpin * this.lastDt
+    glow.opacity =
+      0.9 + Math.sin(this.elapsed * RENDER.space.planet.glowSpeed) * RENDER.space.planet.glowPulse
+    this.pulseConduits()
+  }
+
+  /**
+   * Energy surge travelling along the conduits: one sine drives every pylon
+   * at once so the pair breathes in sync instead of flickering at random.
+   */
+  private pulseConduits(): void {
+    const glow = this.conduitGlow
+    if (glow === null) return
+    glow.opacity =
+      this.conduitBaseOpacity +
+      (0.5 + 0.5 * Math.sin(this.elapsed * RENDER.space.pylon.pulseSpeed)) *
+        RENDER.space.pylon.pulse
+  }
+
+  /** Galaxy flash hook so brick breaks can ripple through the sky. */
+  flashGalaxy(strength = 1): void {
+    this.galaxy.flash(strength)
+  }
+
   update(dt: number): void {
+    this.lastDt = dt
     this.elapsed += dt
+    this.galaxy.update(dt)
+    this.animatePlanet()
     this.driftClouds()
     this.spinBlocks()
     this.flickerWindows(dt)
   }
 
   dispose(): void {
+    this.galaxy.dispose()
     for (const geometry of this.geometries) geometry.dispose()
     for (const material of this.materials) material.dispose()
     this.geometries.length = 0
@@ -151,6 +200,9 @@ export class SceneBuilder {
     const planet = new Mesh(geometry, material)
     planet.position.set(-FIELD.halfWidth * 0.4, FIELD.halfHeight * 1.45, PLANET_DISTANCE)
     this.stage.add(planet)
+    this.planet = planet
+    this.planetGlow = material
+    this.planetBaseY = planet.position.y
 
     const ringGeometry = new TorusGeometry(RENDER.space.planet.ringSize / 2, 0.5, 12, 64)
     const ringMaterial = createNeonMaterial(RING_COLOUR, 0.55)
@@ -160,6 +212,7 @@ export class SceneBuilder {
     ring.position.copy(planet.position)
     ring.rotation.set(1.2, 0.2, 0)
     this.stage.add(ring)
+    this.planetRing = ring
   }
 
   private buildStars(): InstancedMesh {
@@ -239,6 +292,8 @@ export class SceneBuilder {
     const material = createNeonMaterial(hexToInt(PALETTE.guide), 0.5)
     this.geometries.push(geometry)
     this.materials.push(material)
+    this.conduitGlow = material
+    this.conduitBaseOpacity = material.opacity
     for (let index = 0; index < count; index += 1) {
       const side = index % 2 === 0 ? 1 : -1
       const pipe = new Mesh(geometry, material)

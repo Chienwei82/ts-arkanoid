@@ -19,8 +19,10 @@ export default defineConfig({
         // The audio barrel is pure re-exports, and the WebAudio adapters need a
         // real AudioContext (like the WebGL renderer needs a GPU): they are
         // exercised by the manual smoke test, so only the pure audio modules
-        // (RNG, patterns, tracker, preferences) count towards the audio floor.
+        // (patterns, tracker, preferences) count towards the audio floor.
+        // `musicRng` is a re-export too: the implementation lives in `utils/rng`.
         'src/audio/index.ts',
+        'src/audio/musicRng.ts',
         'src/audio/musicEngine.ts',
         'src/audio/musicDirector.ts',
         'src/audio/sound.ts',

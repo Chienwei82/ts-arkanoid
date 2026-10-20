@@ -186,6 +186,7 @@ export class ActorRenderer {
 
   animate(dt: number): void {
     this.elapsed += dt
+    this.pulseBall()
     if (this.pulseTimer <= 0) {
       this.paddlePulse = 0
       return
@@ -198,6 +199,17 @@ export class ActorRenderer {
   /** Squash-and-swell reaction to a paddle bounce. */
   pulsePaddle(): void {
     this.pulseTimer = RENDER.paddlePulse.duration
+  }
+
+  /** Flying ball core breathes and its travelling light throbs with it. */
+  private pulseBall(): void {
+    const pulse = 1 + Math.sin(this.elapsed * RENDER.ballPulse.speed) * RENDER.ballPulse.scale
+    for (const core of this.ballCores) {
+      core.scale.setScalar(pulse)
+    }
+    this.ballLight.intensity =
+      RENDER.ballLight.intensity *
+      (1 + Math.sin(this.elapsed * RENDER.ballLight.pulseSpeed) * RENDER.ballLight.pulse)
   }
 
   /**
