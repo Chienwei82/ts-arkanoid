@@ -116,10 +116,12 @@ export const RENDER = {
   confetti: { life: 1.05, spread: 15, rise: 11, gravity: 30, spin: 8, size: 0.62 },
   /** Additive impact sparks: tiny pooled points for hits, pickups and shots. */
   sparks: { capacity: 420, life: 0.55, gravity: 26, size: 1.35, speed: 18 },
-  trail: { length: 22, spacing: 0.45, size: 1.9, color: '#35e0ff' },
-  ballLight: { intensity: 26, distance: 42, color: '#7df9ff' },
+  trail: { length: 30, spacing: 0.35, size: 2.2, color: '#35e0ff' },
+  ballLight: { intensity: 26, distance: 42, color: '#7df9ff', pulse: 0.12, pulseSpeed: 6 },
   /** Solid-core ball: gentle emissive so hues read without blooming to white. */
   ballGlow: 0.55,
+  /** Breathing of the flying ball core. */
+  ballPulse: { scale: 0.07, speed: 5 },
   waves: { capacity: 4, duration: 0.45, maxRadius: 9 },
   background: { cloudCount: 7, floaterCount: 5, boxCount: 8, bobAmplitude: 0.9 },
   card: { size: 4.4, bob: 0.55, spin: 1.3, glowScale: 1.9, glowAlpha: 0.55, pulse: 0.06 },
@@ -144,9 +146,60 @@ export const RENDER = {
    */
   space: {
     stars: { count: 420, countLow: 180, depthNear: -18, depthFar: -70, size: 0.55 },
-    planet: { distance: -58, size: 20, ringSize: 30 },
+    planet: {
+      distance: -58,
+      size: 20,
+      ringSize: 30,
+      /** Gentle hover so the planet never looks pasted on. */
+      bob: 0.9,
+      bobSpeed: 0.5,
+      /** Slow turn of the ring around its own axis. */
+      ringSpin: 0.12,
+      /** Breathing of the planet halo. */
+      glowPulse: 0.08,
+      glowSpeed: 1.1,
+    },
     grid: { depth: -4, top: -FIELD.halfHeight - 5.5, height: 6, depthSize: 14 },
-    pylon: { x: FIELD.halfWidth * 1.26, z: -7, count: 6 },
+    pylon: {
+      x: FIELD.halfWidth * 1.26,
+      z: -7,
+      count: 6,
+      /** Energy surge travelling along the conduits; synced across pylons. */
+      pulse: 0.22,
+      pulseSpeed: 2.4,
+    },
+    /**
+     * Procedural galactic backdrop: a seeded spiral galaxy drawn far behind
+     * the diorama. `seed` makes the sky reproducible; the rest shapes it.
+     */
+    galaxy: {
+      seed: 'arkanoid.galaxy.v1',
+      depth: -120,
+      /** Lifts the galaxy well above the board so the core clears the panel. */
+      offsetX: -FIELD.halfWidth * 0.12,
+      offsetY: FIELD.halfHeight * 2.8,
+      armCount: 4,
+      armPoints: 90,
+      armInnerRadius: 6,
+      armOuterRadius: 62,
+      armTurns: 1.35,
+      armWidth: 7,
+      starsPerArmPoint: 5,
+      fieldStarCount: 320,
+      nebulaCount: 9,
+      dustLaneCount: 3,
+      fieldRadius: 92,
+      fieldDepth: 26,
+      coreScale: 1,
+      spin: 0.012,
+      /** Sporadic meteors streaking across the far sky. */
+      meteors: { count: 3, intervalMin: 1.6, intervalMax: 4.2, speedMin: 28, speedMax: 55 },
+      /**
+       * Galaxy flash fired on brick breaks: the core halo briefly blooms and
+       * then eases back, so every hit ripples through the sky.
+       */
+      flash: { strength: 0.85, decay: 3.2 },
+    },
   },
   /** Kept for save-shape stability: mirrors `space` while the diorama migrates. */
   building: {

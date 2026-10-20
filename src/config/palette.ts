@@ -19,9 +19,9 @@ export const PALETTE = {
   crimson: '#ff2e4d',
   stone: '#8b98b8',
 
-  skyTop: '#02030c',
-  skyMid: '#070d2b',
-  skyHorizon: '#1b0f4b',
+  skyTop: '#01020a',
+  skyMid: '#0a1038',
+  skyHorizon: '#2a125e',
   cloud: '#8f7bff',
   checkerRed: '#ff3d5e',
 
