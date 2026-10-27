@@ -101,6 +101,16 @@ export class PostFX {
     this.uniforms.resolution.value.set(width * pixelRatio, height * pixelRatio)
   }
 
+  /** Ajusta la intensidad del bloom en tiempo real (más espectáculo en celebraciones). */
+  setBloom(strength: number): void {
+    if (this.bloom !== null) this.bloom.strength = strength
+  }
+
+  /** Ajusta la intensidad de la viñeta (más cerrada en momentos de tensión). */
+  setVignette(amount: number): void {
+    this.uniforms.vignette.value = amount
+  }
+
   render(dt: number): void {
     this.uniforms.time.value += dt
     this.composer.render(dt)

@@ -107,7 +107,10 @@ export class SceneBuilder {
   constructor(scene: Scene, textures: CraftTextures) {
     this.scene = scene
     this.textures = textures
-    scene.background = textures.sky
+    // Fondo intencionadamente transparente: así la galaxia procedural de
+    // GalaxyBackdrop se aprecia detrás del diorama en lugar de taparse con
+    // una textura de cielo opaca.
+    scene.background = null
 
     this.buildGround()
     this.buildLights()

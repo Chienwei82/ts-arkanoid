@@ -160,6 +160,10 @@ export class GalaxyBackdrop {
   private flashLevel = 0
   private elapsed = 0
   private disposed = false
+  /** Cuánto se desplaza la galaxia respecto al escenario (0 = fija, 1 = igual). */
+  private readonly parallaxFactor = 0.15
+  private parallaxX = 0
+  private parallaxY = 0
 
   constructor(textures: CraftTextures) {
     const options = RENDER.space.galaxy
@@ -192,16 +196,28 @@ export class GalaxyBackdrop {
     this.buildMeteors(layout)
   }
 
-  /** Slow galactic drift plus a breathing core; called once per frame. */
+  /**
+   * Slow galactic drift plus a breathing core; called once per frame.
+   * La galaxia se desplaza muy lentamente (parallax) para dar sensación de
+   * profundidad infinita detrás del diorama.
+   */
   update(dt: number): void {
     if (this.disposed) return
     this.elapsed += dt
     this.object.rotation.z = this.elapsed * RENDER.space.galaxy.spin
+    // Parallax autónomo: deriva suave y lenta en X/Y, nunca sincronizada con
+    // el escenario, así el fondo se siente vivo e independiente.
+    this.parallaxX += Math.sin(this.elapsed * 0.13) * 0.02 * this.parallaxFactor
+    this.parallaxY += Math.cos(this.elapsed * 0.09) * 0.02 * this.parallaxFactor
+    this.object.position.x = RENDER.space.galaxy.offsetX + this.parallaxX
+    this.object.position.y = RENDER.space.galaxy.offsetY + this.parallaxY
     const flashDecay = RENDER.space.galaxy.flash.decay
     this.flashLevel = Math.max(0, this.flashLevel - dt * flashDecay)
     if (this.core !== null) {
-      const pulse = 1 + Math.sin(this.elapsed * 0.7) * 0.05
-      this.core.scale.setScalar(this.coreScale * (pulse + this.flashLevel * 0.22))
+      // Respiración del núcleo: pulso base más fuerte cuando hay flash activo.
+      const basePulse = 1 + Math.sin(this.elapsed * 0.9) * 0.06
+      const flashPulse = 1 + this.flashLevel * 0.35
+      this.core.scale.setScalar(this.coreScale * basePulse * flashPulse)
     }
     if (this.coreHalo !== null) {
       this.coreHalo.opacity = Math.min(
