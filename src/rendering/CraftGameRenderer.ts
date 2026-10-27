@@ -113,6 +113,7 @@ export class CraftGameRenderer implements GameRenderer {
 
     this.renderer = new WebGLRenderer({
       antialias: quality.antialias,
+      alpha: true,
       powerPreference: quality.antialias ? 'high-performance' : 'default',
     })
     this.renderer.toneMapping = ACESFilmicToneMapping
@@ -300,6 +301,8 @@ export class CraftGameRenderer implements GameRenderer {
       }),
       this.bus.on('lifeLost', () => {
         this.addTrauma(TRAUMA.life)
+        // La viñeta se cierra un poco al perder vida para subir la tensión.
+        this.postFX.setVignette(Math.min(1, RENDER.vignette + 0.15))
       }),
       this.bus.on('levelChanged', () => {
         this.startIntro()
@@ -315,10 +318,14 @@ export class CraftGameRenderer implements GameRenderer {
       case 'playing':
         this.shake.reset()
         this.startIntro()
+        this.postFX.setBloom(RENDER.bloom.strength)
+        this.postFX.setVignette(RENDER.vignette)
         break
       case 'levelComplete':
         this.celebrationLeft = CELEBRATION_BURSTS
         this.celebrationTimer = 0
+        // Más bloom durante la celebración para realzar el espectáculo visual.
+        this.postFX.setBloom(RENDER.bloom.strength * 1.6)
         break
       case 'gameOver':
         this.addTrauma(TRAUMA.gameOver)
