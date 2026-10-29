@@ -79,8 +79,12 @@ export class BrickRenderer {
   /** Per-brick lookup into `groups` and the instance slot inside that group. */
   private groupIndex = new Int32Array(0)
   private slotIndex = new Int32Array(0)
+  /** Per-brick dirty flag: only dirty bricks are rewritten in `animate`. */
+  private dirty = new Uint8Array(0)
   private colourDirty = false
   private elapsed = 0
+  /** Frame counter used to throttle idle breathing updates. */
+  private idleFrame = 0
 
   constructor(textures: CraftTextures) {
     this.textures = textures
@@ -102,6 +106,8 @@ export class BrickRenderer {
     }))
     this.groupIndex = new Int32Array(bricks.length)
     this.slotIndex = new Int32Array(bricks.length)
+    this.dirty = new Uint8Array(bricks.length)
+    this.dirty.fill(1)
     if (bricks.length === 0) return
 
     const sample = bricks[0]
@@ -135,7 +141,6 @@ export class BrickRenderer {
   /** Observes the simulation and starts the matching visual reaction. */
   sync(): void {
     if (this.bricks.length === 0) return
-    let matricesChanged = false
     for (let index = 0; index < this.bricks.length; index += 1) {
       const brick = this.bricks[index]
       const visual = this.visuals[index]
@@ -144,30 +149,35 @@ export class BrickRenderer {
           visual.alive = false
           visual.hit = 0
           visual.dying = RENDER.brickDeath.duration
-          this.writeBrick(index, brick, visual)
-          matricesChanged = true
+          this.dirty[index] = 1
         }
         continue
       }
       if (brick.hitsLeft !== visual.hitsLeft) {
         visual.hitsLeft = brick.hitsLeft
         if (brick.hitsLeft > 0) visual.hit = RENDER.brickHit.duration
+        this.dirty[index] = 1
         this.writeColour(index, brick, 0)
       }
     }
-    if (matricesChanged) this.flushMatrices()
-    this.flushColours()
   }
 
   /** Advances pulses, shatter animations and the gentle idle breathing. */
   animate(dt: number): void {
     if (this.bricks.length === 0) return
-    let matricesChanged = false
     this.elapsed += dt
+    this.idleFrame += 1
+    // Only animate idle breathing every 4th frame to save GPU uploads.
+    const idleTick = this.idleFrame % 4 === 0
+    let matricesChanged = false
 
     for (let index = 0; index < this.bricks.length; index += 1) {
+      if (!this.dirty[index]) continue
+      this.dirty[index] = 0
+
       const visual = this.visuals[index]
       const brick = this.bricks[index]
+
       if (!brick.alive && visual.dying <= 0 && visual.hit <= 0) continue
 
       if (visual.dying > 0) {
@@ -185,10 +195,10 @@ export class BrickRenderer {
           matricesChanged = true
           continue
         }
+        // Idle breathing: skip on non-idle frames to reduce matrix uploads.
+        if (visual.hit === 0 && !idleTick) continue
       }
 
-      // writeColour flags the colour buffer; matrices are flushed once below.
-      // Idle bricks also breathe so the wall never looks frozen.
       this.writeBrick(index, brick, visual)
       matricesChanged = true
     }

@@ -25,6 +25,7 @@ const MENU_HUD: HudState = {
   isFinalLevel: false,
   helpVisible: false,
   audioEnabled: true,
+  clearance: 0,
   error: null,
 }
 

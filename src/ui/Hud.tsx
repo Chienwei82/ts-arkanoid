@@ -26,6 +26,9 @@ export const Hud = ({ hud }: HudProps) => (
         Nivel {hud.levelIndex + 1} / {hud.levelTotal}
       </span>
       <strong className="hud__level">{hud.levelName}</strong>
+      <div className="level-progress" aria-label="Progreso del nivel">
+        <div className="level-progress__fill" style={{ width: `${hud.clearance * 100}%` }} />
+      </div>
     </section>
 
     <section className="hud__stack hud__stack--end">

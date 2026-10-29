@@ -272,6 +272,7 @@ export class Game implements GameContext {
       isFinalLevel: this.world.levelIndex === this.levels.length - 1,
       helpVisible: this.helpVisible,
       audioEnabled: this.audio?.enabled ?? true,
+      clearance: this.computeClearance(),
       error: null,
     }
   }
@@ -281,7 +282,7 @@ export class Game implements GameContext {
    * much of the destructible wall is gone (closing in on the level clear) and
    * `danger` how close the run is to ending.
    */
-  private audioSignals(): AudioSignals {
+  private computeClearance(): number {
     let total = 0
     let alive = 0
     for (const brick of this.world.bricks) {
@@ -289,7 +290,11 @@ export class Game implements GameContext {
       total += 1
       if (brick.alive) alive += 1
     }
-    const clearance = total === 0 ? 1 : 1 - alive / total
+    return total === 0 ? 1 : 1 - alive / total
+  }
+
+  private audioSignals(): AudioSignals {
+    const clearance = this.computeClearance()
     const lifeSpan = Math.max(1, SCORING.startLives - 1)
     const danger = clamp((SCORING.startLives - this.world.lives) / lifeSpan, 0, 1)
     const level = this.levels.length > 1 ? this.world.levelIndex / (this.levels.length - 1) : 0

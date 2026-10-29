@@ -268,10 +268,14 @@ export class ActorRenderer {
       RENDER.depth.paddle,
     )
     const widthScale = paddle.halfWidth / paddle.baseHalfWidth
-    const stretch = 1 + this.paddlePulse
+    // Squash-and-stretch on paddle hit: the paddle briefly flattens vertically
+    // (Y ↓) and widens horizontally (X ↑), then springs back.
+    const hitPulse = this.paddlePulse
+    const squashY = 1 - hitPulse * 0.22
+    const stretchX = 1 + hitPulse * 0.11
     for (let layer = 0; layer < this.paddleLayers.length; layer += 1) {
       const base = this.paddleLayerScales[layer]
-      this.paddleLayers[layer].scale.set(base.x * widthScale, base.y * stretch, 1)
+      this.paddleLayers[layer].scale.set(base.x * widthScale * stretchX, base.y * squashY, 1)
     }
     // Engine flames breathe with thrust; the wide cue stretches them apart.
     const flamePulse = 1 + Math.sin(this.elapsed * 9) * 0.12 * this.motionScale

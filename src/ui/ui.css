@@ -132,6 +132,24 @@
   letter-spacing: 0.08em;
 }
 
+.level-progress {
+  width: 100%;
+  height: 0.35rem;
+  margin-top: 0.3rem;
+  background: rgba(11, 18, 48, 0.6);
+  border: 0.06rem solid rgba(53, 196, 255, 0.3);
+  border-radius: 0.18rem;
+  overflow: hidden;
+}
+
+.level-progress__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--teal));
+  border-radius: 0.18rem;
+  transition: width 0.3s ease-out;
+  box-shadow: 0 0 0.5rem rgba(53, 196, 255, 0.5);
+}
+
 .hud__combo {
   font-size: clamp(0.65rem, 1.1vw, 0.8rem);
   font-weight: 600;
