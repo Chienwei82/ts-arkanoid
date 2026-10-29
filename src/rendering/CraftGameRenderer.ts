@@ -23,6 +23,7 @@ import { BallTrail } from './BallTrail'
 import { BrickRenderer } from './BrickRenderer'
 import { ConfettiSystem } from './ConfettiSystem'
 import { ExplosionWaves } from './ExplosionWaves'
+import { FloatingScoreSystem } from './FloatingScoreSystem'
 import { PostFX } from './PostFX'
 import { SceneBuilder } from './SceneBuilder'
 import { ScreenShake } from './ScreenShake'
@@ -82,6 +83,7 @@ export class CraftGameRenderer implements GameRenderer {
   private readonly actors: ActorRenderer
   private readonly confetti: ConfettiSystem
   private readonly waves: ExplosionWaves
+  private readonly scores: FloatingScoreSystem
   private readonly trail: BallTrail
   private readonly sparks: SparkSystem
   private readonly postFX: PostFX
@@ -130,6 +132,7 @@ export class CraftGameRenderer implements GameRenderer {
     this.actors = new ActorRenderer(this.textures)
     this.confetti = new ConfettiSystem(this.textures.brickPaper)
     this.waves = new ExplosionWaves()
+    this.scores = new FloatingScoreSystem()
     this.trail = new BallTrail(this.textures.glow)
     this.sparks = new SparkSystem(this.textures.glow)
     this.sceneBuilder.board.add(
@@ -140,6 +143,7 @@ export class CraftGameRenderer implements GameRenderer {
       this.trail.object,
       this.sparks.object,
     )
+    this.sceneBuilder.board.add(this.scores.object)
 
     this.postFX = new PostFX(this.renderer, this.scene, this.camera, quality.bloom)
     this.unsubscribers = this.wireEvents()
@@ -167,6 +171,7 @@ export class CraftGameRenderer implements GameRenderer {
       this.waves.clear()
       this.trail.clear()
       this.sparks.clear()
+      this.scores.clear()
     }
     this.bricks.sync()
     this.actors.sync(world, alpha)
@@ -184,6 +189,7 @@ export class CraftGameRenderer implements GameRenderer {
     this.waves.update(dt)
     this.trail.update(dt, this.trailActive)
     this.sparks.update(dt)
+    this.scores.update(dt)
     this.updateIntro(dt)
     this.updateCelebration(dt)
   }
@@ -227,6 +233,7 @@ export class CraftGameRenderer implements GameRenderer {
     this.sparks.dispose()
     this.waves.dispose()
     this.confetti.dispose()
+    this.scores.dispose()
     this.actors.dispose()
     this.bricks.dispose()
     this.sceneBuilder.dispose()
@@ -240,7 +247,8 @@ export class CraftGameRenderer implements GameRenderer {
 
   private wireEvents(): Unsubscribe[] {
     return [
-      this.bus.on('brickDestroyed', ({ pos, color, type, chain }) => {
+      this.bus.on('brickDestroyed', ({ pos, color, type, chain, points }) => {
+        this.scores.spawn(pos.x, pos.y, points, color)
         this.confetti.burst(
           pos.x,
           pos.y,

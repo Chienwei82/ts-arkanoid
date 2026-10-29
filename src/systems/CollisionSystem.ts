@@ -15,11 +15,95 @@ const PICKUP_RADIUS = 1.2
 const LASER_HALF_WIDTH = 0.17
 const LASER_HALF_HEIGHT = 0.8
 const POWER_UP_OUT_MARGIN = 2
+/** Cell size for the brick spatial grid: ~3-4 bricks per cell side. */
+const GRID_CELL_SIZE = 8
+/** Conservative upper bounds for brick half-dimensions used by the grid query radius. */
+const BRICK_HALF_WIDTH_MAX = 4
+const BRICK_HALF_HEIGHT_MAX = 1.5
 
 /** Lethal balls bypass hit points: the brick dies (explosives still chain). */
 const forceDestroy = (brick: Brick): BrickHitOutcome => {
   brick.hitsLeft = 0
   return { destroyed: true, explodes: brick.type === 'explosive' }
+}
+
+/**
+ * Spatial grid that buckets bricks by world position. Rebuilt when the brick
+ * field changes (level load / destruction), so collision queries only scan
+ * bricks in the ball's cell and adjacent cells instead of the whole field.
+ */
+class BrickGrid {
+  private readonly cellSize: number
+  private readonly cols: number
+  private readonly rows: number
+  private readonly originX: number
+  private readonly originY: number
+  /** Flat array of linked-list heads: each entry stores the first brick index
+   *  in that cell, and bricks link via `nextInGrid`. -1 means empty. */
+  private heads: Int32Array
+  /** Next-brick index in the same cell, parallel to `world.bricks`. */
+  private nextInGrid: Int32Array | null = null
+
+  constructor(fieldWidth: number, fieldHeight: number, cellSize: number) {
+    this.cellSize = cellSize
+    this.originX = -fieldWidth / 2
+    this.originY = -fieldHeight / 2
+    this.cols = Math.ceil(fieldWidth / cellSize)
+    this.rows = Math.ceil(fieldHeight / cellSize)
+    this.heads = new Int32Array(this.cols * this.rows)
+    this.heads.fill(-1)
+  }
+
+  /** World x → grid column index. */
+  private colOf(x: number): number {
+    return Math.floor((x - this.originX) / this.cellSize)
+  }
+
+  /** World y → grid row index. */
+  private rowOf(y: number): number {
+    return Math.floor((y - this.originY) / this.cellSize)
+  }
+
+  private cellIndex(col: number, row: number): number {
+    return row * this.cols + col
+  }
+
+  /** Rebuild the grid from the current brick list. Call when bricks change. */
+  rebuild(bricks: readonly Brick[]): void {
+    this.heads.fill(-1)
+    this.nextInGrid = new Int32Array(bricks.length)
+    for (let i = 0; i < bricks.length; i += 1) {
+      const brick = bricks[i]
+      if (!brick.alive) continue
+      const col = this.colOf(brick.pos.x)
+      const row = this.rowOf(brick.pos.y)
+      if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) continue
+      const idx = this.cellIndex(col, row)
+      this.nextInGrid[i] = this.heads[idx]
+      this.heads[idx] = i
+    }
+  }
+
+  /** Collect indices of alive bricks whose cell overlaps the circle around
+   *  `(x, y)` with the given radius. */
+  queryCircle(x: number, y: number, radius: number, out: number[]): void {
+    if (this.nextInGrid === null) return
+    const minCol = this.colOf(x - radius)
+    const maxCol = this.colOf(x + radius)
+    const minRow = this.rowOf(y - radius)
+    const maxRow = this.rowOf(y + radius)
+    for (let c = minCol; c <= maxCol; c += 1) {
+      if (c < 0 || c >= this.cols) continue
+      for (let r = minRow; r <= maxRow; r += 1) {
+        if (r < 0 || r >= this.rows) continue
+        let idx = this.heads[this.cellIndex(c, r)]
+        while (idx !== -1) {
+          out.push(idx)
+          idx = this.nextInGrid[idx]
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -30,14 +114,22 @@ export class CollisionSystem {
   private readonly bus: GameBus
   private readonly scoring: ScoringSystem
   private readonly powerUpSystem: PowerUpSystem
+  /** Spatial grid over the brick field; rebuilt on level load and brick destruction. */
+  private readonly grid: BrickGrid
+  /** Bricks touched this frame, reused across balls to avoid re-allocating. */
+  private readonly nearby: number[] = []
 
   constructor(bus: GameBus, scoring: ScoringSystem, powerUpSystem: PowerUpSystem) {
     this.bus = bus
     this.scoring = scoring
     this.powerUpSystem = powerUpSystem
+    this.grid = new BrickGrid(FIELD.halfWidth * 2, FIELD.halfHeight * 2, GRID_CELL_SIZE)
   }
 
   update(world: World): void {
+    // Rebuild the grid when the brick array reference changed (new level) or
+    // when any brick died. The grid holds alive bricks only.
+    this.grid.rebuild(world.bricks)
     for (const ball of world.balls) {
       if (!ball.active || ball.stuck) continue
       this.collideWalls(world, ball)
@@ -99,7 +191,15 @@ export class CollisionSystem {
   }
 
   private collideBricks(world: World, ball: Ball): void {
-    for (const brick of world.bricks) {
+    this.nearby.length = 0
+    this.grid.queryCircle(
+      ball.pos.x,
+      ball.pos.y,
+      ball.radius + Math.max(BRICK_HALF_WIDTH_MAX, BRICK_HALF_HEIGHT_MAX),
+      this.nearby,
+    )
+    for (const idx of this.nearby) {
+      const brick = world.bricks[idx]
       if (!brick.alive) continue
       if (
         !circleIntersectsBox(ball.pos, ball.radius, brick.pos, brick.halfWidth, brick.halfHeight)

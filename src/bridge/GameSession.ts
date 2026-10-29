@@ -197,6 +197,7 @@ export class GameSession implements GameFacade {
       isFinalLevel: false,
       helpVisible: true,
       audioEnabled: this.audio?.enabled ?? true,
+      clearance: 0,
       error: null,
     }
   }

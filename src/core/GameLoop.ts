@@ -39,8 +39,16 @@ export class GameLoop {
         steps += 1
       }
       if (steps === this.maxSteps) this.accumulator = 0
-      phase = 'render'
-      this.handlers.render(this.accumulator / this.step, frameDelta)
+
+      // Frame-rate cap: render at most once every minFrameInterval ms (60 FPS).
+      // Simulation keeps stepping at the fixed timestep; skipped frames simply
+      // produce a larger interpolation alpha on the next rendered frame.
+      const shouldRender = now - this.lastRenderTime >= this.minFrameInterval
+      if (shouldRender) {
+        this.lastRenderTime = now
+        phase = 'render'
+        this.handlers.render(this.accumulator / this.step, frameDelta)
+      }
     } catch (error) {
       this.stop()
       this.handlers.onError?.(error, phase)
@@ -50,10 +58,13 @@ export class GameLoop {
   }
 
   private readonly maxDelta: number
+  /** Minimum milliseconds between renders: caps the frame rate at 60 FPS (~16.67 ms). */
+  private readonly minFrameInterval: number
   private rafId = 0
   private running = false
   private suspended = false
   private lastTime = 0
+  private lastRenderTime = 0
   private accumulator = 0
 
   private readonly handleVisibility = (): void => {
@@ -66,6 +77,7 @@ export class GameLoop {
     this.step = PHYSICS.fixedStep
     this.maxDelta = PHYSICS.maxFrameDelta
     this.maxSteps = Math.max(1, Math.ceil(this.maxDelta / this.step))
+    this.minFrameInterval = 1000 / 60
   }
 
   start(): void {

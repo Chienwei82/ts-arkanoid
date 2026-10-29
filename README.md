@@ -8,10 +8,19 @@ depósito de agua y antena en la azotea, bloques voxel y cajas de tres capas (ca
 marco de papel y cuerpo tintado) en madera, metal y hormigón.
 
 - Motor de juego **sin dependencias de three.js ni React** (testeable en Node).
-- **Timestep fijo** para la física y render **interpolado**.
+- **Timestep fijo** para la física y render **interpolado**, con **frame-rate cap a 60 FPS**
+  para no desperdiciar GPU en monitores de alta frecuencia.
 - Ladrillos en `InstancedMesh`, confeti y proyectiles con **object pooling**: sin
   asignaciones en el bucle de render.
+- **Dirty tracking** por ladrillo: matrices y colores de instancia sólo se reescriben cuando
+  cambian (golpe, desintegración), no en cada frame.
+- **Grid espacial** en `CollisionSystem` para colisiones bola↔ladrillo: solo se prueban las
+  celdas cercanas a cada bola, reduciendo O(n) a O(log n).
+- Números flotantes de puntuación (+50, +180) sobre los ladrillos destruidos, con pool de
+  Sprites y texturas cacheadas.
 - Post-procesado con `EffectComposer`: **bloom** suave + pase propio de **viñeta y grano de papel**.
+- Screen shake por trauma + squash/stretch del paddle al impactar.
+- Barra de progreso de nivel basada en `clearance` (porcentaje de ladrillos destruidos).
 - Puente delgado motor↔React mediante **store externo** (`useSyncExternalStore`); el motor
   nunca conoce a React.
 - **Audio procedural 100 % WebAudio** (sin ficheros): música generada por semilla con semillas
@@ -141,9 +150,9 @@ src/
                (WebAudio; implementan el contrato GameAudio). El RNG vive en `utils/rng`
   rendering/   escena papercraft: SceneBuilder, BrickRenderer, ActorRenderer,
                ConfettiSystem, BallTrail, ExplosionWaves, ScreenShake, PostFX,
-               GalaxyBackdrop (fondo galáctico procedural) + `galaxy.ts` (su layout
-               determinista), texturas generadas por canvas y CraftGameRenderer
-               (implementa GameRenderer)
+               GalaxyBackdrop (fondo galáctico procedural), FloatingScoreSystem
+               (números flotantes), texturas generadas por canvas y
+               CraftGameRenderer (implementa GameRenderer)
   bridge/      GameFacade + GameSession (store externo que consume React)
   ui/          componentes React (HUD, paneles, controles táctiles) y su CSS
 tests/         pruebas unitarias de física, colisiones, puntuación, estados, niveles,
@@ -229,14 +238,21 @@ niveles (`IGNICIÓN`, `FORTÍN`, `LABERINTO`, `NÚCLEO`).
 - Ladrillos: **tres `InstancedMesh` por material** presente en el nivel (casete de tinta, marco
   de papel, cuerpo tintado) → madera, metal, hormigón y caja de peligro, cada familia con su
   textura pintada. Un campo de ~90 ladrillos cuesta unos pocos _draw calls_ y sólo se reescriben
-  las matrices de los ladrillos que están animándose (pulso de impacto o desintegración).
+  las matrices de los ladrillos que están animándose (**dirty tracking**), no en cada frame.
+- Colisiones bola↔ladrillo: **grid espacial** en `CollisionSystem` que bucketea ladrillos vivos
+  por celda (8 unidades mundiales); cada bola sólo prueba las celdas de su vecindario
+  inmediato, reduciendo el número de test de colisión en orden de magnitud.
 - Confeti: un `InstancedMesh` de 600 piezas recicladas con pool; cada rotura estalla con el
   color del ladrillo (más pequeña en las explosiones en cadena, que además lanzan una onda).
 - Estela: `Points` con `BufferGeometry` de tamaño fijo (ring buffer) y blending aditivo.
+- Números flotantes: sprites con **pool** (máx. 32 activos) y texturas canvas cacheadas por
+  combinación de puntos/color; aparecen sobre los ladrillos destruidos y suben mientras
+  hacen fade-in/out con blending aditivo.
 - Iluminación dinámica: `PointLight` que sigue a la bola y deja un charco de luz sobre los
   ladrillos; ambiente hemisférico + direccional para el look de papel mate.
 - Screen shake por _trauma_ (amplitud = trauma²) aplicado a la cámara con ruido de senos: sin
-  asignaciones ni RNG en el bucle.
+  asignaciones ni RNG en el bucle. Al impactar la bola contra el paddle se combina con un
+  efecto de **squash/stretch** (el paddle se aplasta en Y y se estira en X brevemente).
 - Post-proceso: `RenderPass` → `UnrealBloomPass` (umbral alto, sólo altas luces) → viñeta +
   grano de papel → `OutputPass` (tone mapping ACES y conversión de color).
 - Canvas responsivo: `ViewportManager` (`platform/`) mide el host con `ResizeObserver` y
@@ -247,6 +263,12 @@ niveles (`IGNICIÓN`, `FORTÍN`, `LABERINTO`, `NÚCLEO`).
 - Calidad reducida en móvil (`QUALITY.low`): sin antialias ni bloom y con pixel ratio más
   ajustado. El render se detiene mientras la pestaña está oculta (`GameLoop` se suspende con
   `visibilitychange`) y el motor se auto-pausa al perder el foco.
+- Frame-rate cap a 60 FPS: `GameLoop` salta frames de `requestAnimationFrame` cuando
+  `performance.now()` indica que aún no han transcurrido los 16.67 ms del mínimo intervalo,
+  evitando renders redundantes en monitores de 120/144 Hz sin afectar la simulación de física
+  (que corre a 120 Hz con timestep fijo).
+- Barra de progreso: el HUD muestra un medidor de `clearance` (fracción de ladrillos
+  destructores destruidos) que se llena a medida que se avanza en el nivel.
 - Transiciones: al cambiar de nivel o empezar partida el tablero entra con escala/tilt y la
   cámara retrocede brevemente; al superar un nivel cae confeti desde arriba.
 - Sin números mágicos: todo el ajuste vive en `src/config/gameConfig.ts` y `palette.ts`.
