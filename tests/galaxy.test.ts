@@ -138,7 +138,8 @@ describe('galaxy layout', () => {
  * The backdrop only needs the glow sprite, so a bare texture keeps the test
  * independent from the canvas painting (jsdom has no 2D context).
  */
-const createTextures = (): CraftTextures => ({ glow: new Texture() }) as unknown as CraftTextures
+const createTextures = (): CraftTextures =>
+  ({ glow: new Texture(), ribbon: new Texture() }) as unknown as CraftTextures
 
 describe('galaxy backdrop', () => {
   it('builds the sky behind the diorama', () => {
@@ -185,6 +186,30 @@ describe('galaxy backdrop', () => {
         (child.material as { blending?: number }).blending !== AdditiveBlending,
     )
     expect(normal.length).toBeGreaterThan(0)
+
+    backdrop.dispose()
+  })
+
+  it('draws the arms as soft stamped glow quads instead of a faceted strip', () => {
+    const textures = createTextures()
+    const backdrop = new GalaxyBackdrop(textures)
+
+    const ribbons = backdrop.object.children.filter(
+      (child): child is Mesh =>
+        child instanceof Mesh &&
+        (child.material as { map?: Texture | null }).map === textures.ribbon,
+    )
+    // Two bands per arm (wide glow + tight core) plus one per dust lane.
+    const expected = RENDER.space.galaxy.armCount * 2 + RENDER.space.galaxy.dustLaneCount
+    expect(ribbons).toHaveLength(expected)
+
+    for (const ribbon of ribbons) {
+      // One quad (4 vertices) per spine section: the falloff lives in the
+      // texture, so no section can ever show a hard triangle edge.
+      expect(ribbon.geometry.attributes.position.count % 4).toBe(0)
+      expect(ribbon.geometry.attributes.uv).toBeDefined()
+      expect(ribbon.geometry.attributes.color).toBeUndefined()
+    }
 
     backdrop.dispose()
   })

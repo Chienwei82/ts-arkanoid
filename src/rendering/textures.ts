@@ -17,6 +17,11 @@ const ICON_SIZE = 128
 const CHECKER_SIZE = 128
 const DASH_SIZE = 64
 
+/** Size of the soft ribbon mask used by the galaxy arms and dust lanes. */
+const RIBBON_SIZE = 64
+/** Size of the playfield glass gradient. */
+const FIELD_SIZE = 128
+
 const createCanvas = (size: number): HTMLCanvasElement => {
   const canvas = document.createElement('canvas')
   canvas.width = size
@@ -104,6 +109,72 @@ const paintGlow = (): CanvasTexture => {
     gradient.addColorStop(1, 'rgba(125, 249, 255, 0)')
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, GLOW_SIZE, GLOW_SIZE)
+  }
+  return toTexture(canvas, null)
+}
+
+/**
+ * Soft mask for the galaxy ribbons: opaque along the middle of the strip and
+ * transparent at both rims, with the ends tapered so the ribbon melts into the
+ * sky. Painting the falloff once keeps the arms smooth instead of faceted.
+ */
+const paintRibbon = (): CanvasTexture => {
+  const canvas = createCanvas(RIBBON_SIZE)
+  const ctx = canvas.getContext('2d')
+  if (ctx !== null) {
+    const across = ctx.createLinearGradient(0, 0, RIBBON_SIZE, 0)
+    across.addColorStop(0, 'rgba(255, 255, 255, 0)')
+    across.addColorStop(0.28, 'rgba(255, 255, 255, 0.62)')
+    across.addColorStop(0.5, 'rgba(255, 255, 255, 1)')
+    across.addColorStop(0.72, 'rgba(255, 255, 255, 0.62)')
+    across.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    ctx.fillStyle = across
+    ctx.fillRect(0, 0, RIBBON_SIZE, RIBBON_SIZE)
+
+    // Multiply the alpha by a vertical taper so both ends of the ribbon vanish.
+    const along = ctx.createLinearGradient(0, 0, 0, RIBBON_SIZE)
+    along.addColorStop(0, 'rgba(255, 255, 255, 0)')
+    along.addColorStop(0.22, 'rgba(255, 255, 255, 1)')
+    along.addColorStop(0.78, 'rgba(255, 255, 255, 1)')
+    along.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.fillStyle = along
+    ctx.fillRect(0, 0, RIBBON_SIZE, RIBBON_SIZE)
+    ctx.globalCompositeOperation = 'source-over'
+  }
+  return toTexture(canvas, null)
+}
+
+/**
+ * Holographic layer of the playfield: a cyan bloom that falls off towards the
+ * edges plus faint scan lines. Purely additive, so the sky stays visible
+ * through the semi-transparent board.
+ */
+const paintFieldGlass = (): CanvasTexture => {
+  const canvas = createCanvas(FIELD_SIZE)
+  const ctx = canvas.getContext('2d')
+  if (ctx !== null) {
+    const bloom = ctx.createRadialGradient(
+      FIELD_SIZE / 2,
+      FIELD_SIZE * 0.22,
+      0,
+      FIELD_SIZE / 2,
+      FIELD_SIZE * 0.5,
+      FIELD_SIZE * 0.8,
+    )
+    bloom.addColorStop(0, 'rgba(125, 249, 255, 0.4)')
+    bloom.addColorStop(0.45, 'rgba(53, 196, 255, 0.14)')
+    bloom.addColorStop(1, 'rgba(53, 196, 255, 0)')
+    ctx.fillStyle = bloom
+    ctx.fillRect(0, 0, FIELD_SIZE, FIELD_SIZE)
+
+    ctx.fillStyle = 'rgba(125, 249, 255, 0.03)'
+    for (let y = 0; y < FIELD_SIZE; y += 4) ctx.fillRect(0, y, FIELD_SIZE, 1)
+
+    // A faint rim keeps the field edges readable over the open sky.
+    ctx.strokeStyle = 'rgba(125, 249, 255, 0.16)'
+    ctx.lineWidth = 3
+    ctx.strokeRect(1.5, 1.5, FIELD_SIZE - 3, FIELD_SIZE - 3)
   }
   return toTexture(canvas, null)
 }
@@ -456,6 +527,8 @@ const paintIcons = (): Readonly<Record<PowerUpType, CanvasTexture>> => ({
 export class CraftTextures {
   readonly sky: CanvasTexture
   readonly glow: CanvasTexture
+  readonly ribbon: CanvasTexture
+  readonly fieldGlass: CanvasTexture
   readonly dash: CanvasTexture
   readonly checker: CanvasTexture
   readonly brickPaper: CanvasTexture
@@ -468,6 +541,8 @@ export class CraftTextures {
   constructor() {
     this.sky = paintSky()
     this.glow = paintGlow()
+    this.ribbon = paintRibbon()
+    this.fieldGlass = paintFieldGlass()
     this.dash = paintDash()
     this.checker = paintChecker()
     this.brickPaper = paintFiber([3, 1.4])
@@ -482,6 +557,8 @@ export class CraftTextures {
     const all: Texture[] = [
       this.sky,
       this.glow,
+      this.ribbon,
+      this.fieldGlass,
       this.dash,
       this.checker,
       this.brickPaper,

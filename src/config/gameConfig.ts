@@ -98,7 +98,7 @@ export const RENDER = {
   brickLayers: {
     ink: { x: 1.12, y: 1.16, z: -0.45 },
     paper: { x: 1, y: 1, z: 0 },
-    body: { x: 0.88, y: 0.84, z: 0.5 },
+    body: { x: 0.9, y: 0.86, z: 0.5 },
   },
   brickHit: { duration: 0.25, pop: 0.55, squash: 0.2, flash: 0.65 },
   brickDeath: { duration: 0.34, spin: 6, lift: 3.5, gravity: 22, shrink: 0.15 },
@@ -161,7 +161,7 @@ export const RENDER = {
     },
     grid: { depth: -4, top: -FIELD.halfHeight - 5.5, height: 6, depthSize: 14 },
     pylon: {
-      x: FIELD.halfWidth * 1.26,
+      x: FIELD.halfWidth * 1.42,
       z: -7,
       count: 6,
       /** Energy surge travelling along the conduits; synced across pylons. */

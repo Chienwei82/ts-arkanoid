@@ -43,9 +43,12 @@ export const createTintablePaperMaterial = (map: Texture | null): MeshLambertMat
 export const createVividBodyMaterial = (map: Texture | null): MeshBasicMaterial =>
   new MeshBasicMaterial({ color: 0xffffff, map })
 
-/** Bright paper frame around each brick: unlit so the white edge always reads. */
+/**
+ * Paper frame around each brick: unlit, white base so the per-instance colour
+ * (the brick's own hue, lifted towards white) defines the rim.
+ */
 export const createFrameMaterial = (map: Texture | null): MeshBasicMaterial =>
-  new MeshBasicMaterial({ color: 0xf4f7ff, map })
+  new MeshBasicMaterial({ color: 0xffffff, map })
 
 /** Additive sprite used by the ball trail, engine glow and the planet disc. */
 export const createGlowMaterial = (map: Texture): MeshBasicMaterial =>
@@ -61,12 +64,35 @@ export const createNeonMaterial = (colour: number, opacity = 0.9): MeshBasicMate
     depthWrite: false,
   })
 
-/** Brushed starship hull: lit alloy with a neon-friendly sheen. */
+/**
+ * Brushed starship hull: lit alloy with a neon-friendly sheen. Metalness is kept
+ * low on purpose: without an environment map a metallic material absorbs almost
+ * every light and the props read as flat black squares.
+ */
 export const createHullMaterial = (colour: number, map: Texture | null): MeshStandardMaterial =>
   new MeshStandardMaterial({
     color: colour,
     map,
-    metalness: 0.55,
-    roughness: 0.38,
+    metalness: 0.12,
+    roughness: 0.55,
     flatShading: true,
+  })
+
+/**
+ * Translucent glass plate for the playfield and its inner glow. Additive and
+ * depth-write free, so it only adds light over the sky behind the board and
+ * never hides what is behind it.
+ */
+export const createGlassMaterial = (
+  map: Texture | null,
+  colour: number,
+  opacity: number,
+): MeshBasicMaterial =>
+  new MeshBasicMaterial({
+    color: colour,
+    map,
+    transparent: true,
+    opacity,
+    blending: AdditiveBlending,
+    depthWrite: false,
   })

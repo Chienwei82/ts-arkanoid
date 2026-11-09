@@ -16,6 +16,7 @@ import { brickMaterialFor, type BrickMaterial } from './brickMaterial'
 import { createFrameMaterial, createInkMaterial, createVividBodyMaterial } from './materials'
 import type { CraftTextures } from './textures'
 
+const FRAME_LAYER = 1
 const BODY_LAYER = 2
 const LAYER_COUNT = 3
 /** Draw order of the three stacked layers: ink casing, paper frame, body. */
@@ -33,6 +34,14 @@ const DAMAGED_FLOOR = 0.55
 const DEATH_POP = 2.2
 /** Extra uniform scale at the peak of the hit pulse. */
 const HIT_SWELL = 0.05
+/**
+ * How far the frame is lifted towards white. The rim used to be near-white,
+ * which bloomed into a glowing square halo around every piece; keeping it tinted
+ * with the brick's own colour reads as painted paper instead.
+ */
+const FRAME_LIGHTNESS = 0.45
+/** Idle breathing runs every Nth frame; reactions always run every frame. */
+const IDLE_STRIDE = 4
 
 interface BrickVisual {
   hit: number
@@ -79,12 +88,11 @@ export class BrickRenderer {
   /** Per-brick lookup into `groups` and the instance slot inside that group. */
   private groupIndex = new Int32Array(0)
   private slotIndex = new Int32Array(0)
-  /** Per-brick dirty flag: only dirty bricks are rewritten in `animate`. */
-  private dirty = new Uint8Array(0)
   private colourDirty = false
   private elapsed = 0
   /** Frame counter used to throttle idle breathing updates. */
   private idleFrame = 0
+  private readonly frameColour = new Color()
 
   constructor(textures: CraftTextures) {
     this.textures = textures
@@ -106,8 +114,6 @@ export class BrickRenderer {
     }))
     this.groupIndex = new Int32Array(bricks.length)
     this.slotIndex = new Int32Array(bricks.length)
-    this.dirty = new Uint8Array(bricks.length)
-    this.dirty.fill(1)
     if (bricks.length === 0) return
 
     const sample = bricks[0]
@@ -149,54 +155,51 @@ export class BrickRenderer {
           visual.alive = false
           visual.hit = 0
           visual.dying = RENDER.brickDeath.duration
-          this.dirty[index] = 1
         }
         continue
       }
       if (brick.hitsLeft !== visual.hitsLeft) {
         visual.hitsLeft = brick.hitsLeft
         if (brick.hitsLeft > 0) visual.hit = RENDER.brickHit.duration
-        this.dirty[index] = 1
         this.writeColour(index, brick, 0)
       }
     }
   }
 
-  /** Advances pulses, shatter animations and the gentle idle breathing. */
+  /**
+   * Advances hit pulses, the shatter animation and the gentle idle breathing.
+   *
+   * Timers are driven by their own state, never by a "changed this frame" flag:
+   * hiding a destroyed piece depends on the shatter timer reaching zero, and a
+   * flag that is only set on the frame the brick dies would freeze the piece
+   * mid-animation and leave it floating on the field forever. Only the calm
+   * idle breathing is throttled, so a still wall still costs next to nothing.
+   */
   animate(dt: number): void {
     if (this.bricks.length === 0) return
     this.elapsed += dt
     this.idleFrame += 1
-    // Only animate idle breathing every 4th frame to save GPU uploads.
-    const idleTick = this.idleFrame % 4 === 0
+    const idleTick = this.idleFrame % IDLE_STRIDE === 0
     let matricesChanged = false
 
     for (let index = 0; index < this.bricks.length; index += 1) {
-      if (!this.dirty[index]) continue
-      this.dirty[index] = 0
-
       const visual = this.visuals[index]
       const brick = this.bricks[index]
-
+      // Already shattered and hidden: nothing left to draw for this piece.
       if (!brick.alive && visual.dying <= 0 && visual.hit <= 0) continue
 
+      const reacting = visual.dying > 0 || visual.hit > 0
+      if (!reacting && !idleTick) continue
+
       if (visual.dying > 0) {
-        visual.dying -= dt
-        if (visual.dying <= 0) {
-          visual.dying = 0
+        visual.dying = Math.max(0, visual.dying - dt)
+        if (visual.dying === 0) {
           this.hideBrick(index)
           matricesChanged = true
           continue
         }
       } else {
         visual.hit = Math.max(0, visual.hit - dt)
-        if (visual.hit === 0 && !visual.alive) {
-          this.hideBrick(index)
-          matricesChanged = true
-          continue
-        }
-        // Idle breathing: skip on non-idle frames to reduce matrix uploads.
-        if (visual.hit === 0 && !idleTick) continue
       }
 
       this.writeBrick(index, brick, visual)
@@ -287,7 +290,12 @@ export class BrickRenderer {
     }
     if (pulse > 0) this.colour.lerp(WHITE, RENDER.brickHit.flash * pulse)
     const group = this.groups[this.groupIndex[index]]
-    group.layers[BODY_LAYER].setColorAt(this.slotIndex[index], this.colour)
+    const slot = this.slotIndex[index]
+    group.layers[BODY_LAYER].setColorAt(slot, this.colour)
+    // The rim is the same colour, just lifted towards white: a pure white frame
+    // bloomed into a bright square halo around every piece.
+    this.frameColour.copy(this.colour).lerp(WHITE, FRAME_LIGHTNESS)
+    group.layers[FRAME_LAYER].setColorAt(slot, this.frameColour)
     this.colourDirty = true
   }
 
@@ -313,8 +321,10 @@ export class BrickRenderer {
     if (!this.colourDirty) return
     this.colourDirty = false
     for (const group of this.groups) {
-      const colours = group.layers[BODY_LAYER].instanceColor
-      if (colours !== null) colours.needsUpdate = true
+      const body = group.layers[BODY_LAYER].instanceColor
+      if (body !== null) body.needsUpdate = true
+      const frame = group.layers[FRAME_LAYER].instanceColor
+      if (frame !== null) frame.needsUpdate = true
     }
   }
 

@@ -209,7 +209,8 @@ const buildDustLanes = (rng: () => number, options: GalaxyOptions): GalaxyDustLa
   const lanes: GalaxyDustLane[] = []
   for (let lane = 0; lane < options.dustLaneCount; lane += 1) {
     const points: (readonly [number, number])[] = []
-    const steps = Math.max(12, Math.floor(options.armPoints / 3))
+    // Dense enough to follow the arm curve without visible straight segments.
+    const steps = Math.max(24, Math.floor(options.armPoints * 0.7))
     const inner = options.armInnerRadius * 1.1
     const outer = options.armOuterRadius * 0.92
     for (let step = 0; step < steps; step += 1) {
