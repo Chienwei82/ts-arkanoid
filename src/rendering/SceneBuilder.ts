@@ -9,6 +9,7 @@ import {
   Euler,
   Group,
   HemisphereLight,
+  IcosahedronGeometry,
   InstancedMesh,
   Matrix4,
   Mesh,
@@ -25,12 +26,14 @@ import { BRICK, FIELD, RENDER } from '../config/gameConfig'
 import { PALETTE } from '../config/palette'
 import { hexToInt } from '../utils/math'
 import {
+  createGlassMaterial,
   createGlowMaterial,
   createHullMaterial,
   createInkMaterial,
   createNeonMaterial,
   createPaperMaterial,
   createTintablePaperMaterial,
+  createVividBodyMaterial,
 } from './materials'
 import type { CraftTextures } from './textures'
 import { createPylonGeometry } from './props'
@@ -43,6 +46,20 @@ const DEBRIS_DEPTH = { near: -9, far: -24 }
 const FIELD_THICKNESS = 0.9
 const PLANET_COLOUR = 0x6f5cff
 const RING_COLOUR = 0x35c4ff
+/**
+ * Playfield plate: translucent enough that the procedural sky reads through it,
+ * dark enough that the bricks and the ball still pop.
+ */
+const PANEL_OPACITY = 0.58
+/** Additive holographic layer sitting on the field. */
+const GLASS_OPACITY = 0.16
+const GLASS_OFFSET = 0.02
+/** Neon rails are framing, not the main event: keep them from flooding the screen. */
+const RAIL_OPACITY = 0.5
+/** Scenery debris is dimmed so it never competes with the bricks. */
+const DEBRIS_TINT = 0.5
+/** Pylons sit outside the field and glow through the board, so keep them dim. */
+const PYLON_TINT = 0.45
 
 const randomBetween = (min: number, max: number): number => min + Math.random() * (max - min)
 
@@ -221,7 +238,7 @@ export class SceneBuilder {
   private buildStars(): InstancedMesh {
     const geometry = new PlaneGeometry(RENDER.space.stars.size, RENDER.space.stars.size)
     const material = createGlowMaterial(this.textures.glow)
-    material.color.setHex(0xbfe9ff)
+    material.color.setHex(0x8fc4e8)
     this.geometries.push(geometry)
     this.materials.push(material)
     const mesh = new InstancedMesh(geometry, material, RENDER.background.cloudCount * 40)
@@ -236,7 +253,7 @@ export class SceneBuilder {
         phase: Math.random() * Math.PI * 2,
         drift: randomBetween(0.6, 2.2),
         bob: randomBetween(0.2, 0.6) * RENDER.background.bobAmplitude,
-        size: randomBetween(0.7, 1.6),
+        size: randomBetween(0.5, 1.15),
       })
     }
     this.stage.add(mesh)
@@ -278,7 +295,11 @@ export class SceneBuilder {
       const lit = Math.random() < 0.7
       this.windowLit.push(lit)
       this.windowPhase.push(Math.random() * Math.PI * 2)
-      this.colour.setHex(hexToInt(lit ? PALETTE.windowLit : PALETTE.windowDark))
+      // Dimmed hull tint: the beacons glow through the translucent board, so an
+      // untinted hull turned them into white blobs floating over the field.
+      this.colour
+        .setHex(hexToInt(lit ? PALETTE.windowLit : PALETTE.windowDark))
+        .multiplyScalar(lit ? PYLON_TINT : PYLON_TINT * 0.4)
       mesh.setColorAt(index, this.colour)
     }
     mesh.instanceMatrix.needsUpdate = true
@@ -287,12 +308,16 @@ export class SceneBuilder {
     return mesh
   }
 
-  /** Energy conduits arcing behind the board margins. */
+  /**
+   * Energy conduits arcing behind the board margins. They are pushed outside the
+   * field on purpose: the board is translucent now, so anything parked behind it
+   * would show through the play area.
+   */
   private buildPipes(): void {
     const { count } = RENDER.space.pylon
     const depth = RENDER.space.pylon.z
-    const geometry = new CylinderGeometry(0.22, 0.22, FIELD.halfHeight * 2.4, 8)
-    const material = createNeonMaterial(hexToInt(PALETTE.guide), 0.5)
+    const geometry = new CylinderGeometry(0.18, 0.18, FIELD.halfHeight * 1.7, 8)
+    const material = createNeonMaterial(hexToInt(PALETTE.guide), 0.2)
     this.geometries.push(geometry)
     this.materials.push(material)
     this.conduitGlow = material
@@ -301,7 +326,7 @@ export class SceneBuilder {
       const side = index % 2 === 0 ? 1 : -1
       const pipe = new Mesh(geometry, material)
       pipe.position.set(
-        side * randomBetween(0.75, 1.3) * FIELD.halfWidth,
+        side * randomBetween(1.22, 1.5) * FIELD.halfWidth,
         randomBetween(-0.95, -0.1) * FIELD.halfHeight,
         depth + randomBetween(-0.6, 0.6),
       )
@@ -310,10 +335,14 @@ export class SceneBuilder {
     }
   }
 
-  /** Tumbling hull debris drifting beside the launch bay. */
+  /**
+   * Tumbling hull debris drifting beside the launch bay. Faceted asteroids
+   * instead of boxes: a spinning cube beside the board reads as a flat black
+   * square, while a low-poly rock reads as debris.
+   */
   private buildBlocks(): InstancedMesh {
-    const geometry = new BoxGeometry(1, 1, 1)
-    const material = createTintablePaperMaterial(this.textures.brickPaper)
+    const geometry = new IcosahedronGeometry(0.62, 0)
+    const material = createVividBodyMaterial(this.textures.brickPaper)
     this.geometries.push(geometry)
     this.materials.push(material)
     const count = RENDER.background.boxCount
@@ -330,7 +359,10 @@ export class SceneBuilder {
         speed: randomBetween(0.25, 0.7),
         phase: Math.random() * Math.PI * 2,
       })
-      this.colour.setHex(hexToInt(PALETTE.brickRows[index % PALETTE.brickRows.length]))
+      // Dimmed row colours: debris is scenery, not distractingly bright.
+      this.colour
+        .setHex(hexToInt(PALETTE.brickRows[index % PALETTE.brickRows.length]))
+        .multiplyScalar(DEBRIS_TINT)
       mesh.setColorAt(index, this.colour)
     }
     if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true
@@ -388,7 +420,9 @@ export class SceneBuilder {
       if (wave < 0.75) continue
       if (Math.random() >= chance) continue
       this.windowLit[index] = !this.windowLit[index]
-      this.colour.setHex(hexToInt(this.windowLit[index] ? PALETTE.windowLit : PALETTE.windowDark))
+      this.colour
+        .setHex(hexToInt(this.windowLit[index] ? PALETTE.windowLit : PALETTE.windowDark))
+        .multiplyScalar(this.windowLit[index] ? PYLON_TINT : PYLON_TINT * 0.4)
       this.windows.setColorAt(index, this.colour)
       changed = true
     }
@@ -397,7 +431,15 @@ export class SceneBuilder {
     if (colours !== null) colours.needsUpdate = true
   }
 
-  /** Play board: dark hull panel plus neon rails around the field. */
+  /**
+   * Play board: a translucent hull panel plus neon rails around the field.
+   *
+   * The panel deliberately keeps a low opacity with `depthWrite` off: it sits
+   * behind every gameplay layer, so the procedural sky (galaxy, dust, stars)
+   * keeps shining through the field instead of being hidden by a black plate.
+   * A cyan "glass" plane on top adds the holographic glow that keeps the field
+   * readable without blocking anything behind it.
+   */
   private buildBoard(): void {
     const frame = FIELD.wallThickness
     const fieldWidth = FIELD.halfWidth * 2
@@ -408,17 +450,32 @@ export class SceneBuilder {
       FIELD_THICKNESS,
     )
     const panelMaterial = createPaperMaterial(this.textures.panelPaper)
-    panelMaterial.color.setHex(hexToInt(PALETTE.paperShadow))
+    panelMaterial.color.setHex(hexToInt(PALETTE.paper))
+    panelMaterial.transparent = true
+    panelMaterial.opacity = PANEL_OPACITY
+    panelMaterial.depthWrite = false
     this.geometries.push(panelGeometry)
     this.materials.push(panelMaterial)
     const panel = new Mesh(panelGeometry, panelMaterial)
     panel.position.z = RENDER.depth.panel
     this.board.add(panel)
 
+    const glassGeometry = new PlaneGeometry(fieldWidth, fieldHeight)
+    const glassMaterial = createGlassMaterial(
+      this.textures.fieldGlass,
+      hexToInt(PALETTE.guide),
+      GLASS_OPACITY,
+    )
+    this.geometries.push(glassGeometry)
+    this.materials.push(glassMaterial)
+    const glass = new Mesh(glassGeometry, glassMaterial)
+    glass.position.z = RENDER.depth.panel + FIELD_THICKNESS / 2 + GLASS_OFFSET
+    this.board.add(glass)
+
     const inkMaterial = createInkMaterial()
     const wallMaterial = createHullMaterial(hexToInt(PALETTE.wall), this.textures.panelPaper)
     // Cyan rails top and bottom frame the board like a launch bay.
-    const railMaterial = createNeonMaterial(hexToInt(PALETTE.wallAccent), 0.85)
+    const railMaterial = createNeonMaterial(hexToInt(PALETTE.wallAccent), RAIL_OPACITY)
     this.materials.push(inkMaterial, wallMaterial, railMaterial)
     const wallDepth = BRICK.depth * 1.25
     const walls: readonly (readonly [number, number, number, number])[] = [

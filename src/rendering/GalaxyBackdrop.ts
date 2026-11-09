@@ -79,57 +79,53 @@ interface MeteorInstance {
 }
 
 /**
- * Builds a triangle strip that follows a spine, used for the arm glow and the
- * dark dust lanes. The strip fades out at both ends and keeps a soft edge by
- * varying the width along the radius.
+ * Builds a luminous band by stamping a soft glow quad on every section of a
+ * spine, merged into a single geometry (one draw call per band).
+ *
+ * A triangle strip whose width comes from UVs still paints its sections as
+ * hard-edged triangles, because each section only has three vertices across:
+ * the falloff is linear inside the triangle and the edges read as saw teeth.
+ * Overlapping radial sprites fuse into a smooth, cloudy ribbon instead, which is
+ * exactly the look a galaxy arm wants - and it never shows a polygon edge.
  */
-const buildRibbon = (
-  points: readonly RibbonPoint[],
-  width: number,
-  colour: number,
-  alpha: number,
-): BufferGeometry => {
+const buildGlowPath = (points: readonly RibbonPoint[], width: number): BufferGeometry => {
   const positions: number[] = []
-  const colors: number[] = []
+  const uvs: number[] = []
   const indices: number[] = []
-  const tint = new Color(colour)
   const count = points.length
 
-  for (let index = 0; index < count; index += 1) {
-    const point = points[index]
-    const previous = points[Math.max(0, index - 1)]
-    const next = points[Math.min(count - 1, index + 1)]
-    const tx = next.x - previous.x
-    const ty = next.y - previous.y
-    const length = Math.hypot(tx, ty) || 1
-    // Normal of the tangent: the strip grows sideways from the spine.
-    const nx = -ty / length
-    const ny = tx / length
-    // Wide at the rim, tight near the core.
-    const half = width * (0.4 + 0.6 * point.radius)
-    // Fade the ends so the ribbon melts into the background.
-    const t = count <= 1 ? 0 : index / (count - 1)
-    const fade = Math.sin(Math.PI * t) ** 0.6
-    // Three vertices per section: transparent rim, solid centre, transparent rim.
-    const offsets = [half, 0, -half]
-    const alphas = [0, alpha * fade, 0]
-    for (let slot = 0; slot < 3; slot += 1) {
-      positions.push(point.x + nx * offsets[slot], point.y + ny * offsets[slot], 0)
-      colors.push(tint.r, tint.g, tint.b, alphas[slot])
-    }
-  }
-
   for (let index = 0; index < count - 1; index += 1) {
-    const a = index * 3
-    const b = (index + 1) * 3
-    // Two quads per section pair: left rim to centre, centre to right rim.
-    indices.push(a, a + 1, b, a + 1, b + 1, b)
-    indices.push(a + 1, a + 2, b + 1, a + 1, b + 2, b + 1)
+    const start = points[index]
+    const end = points[index + 1]
+    const dx = end.x - start.x
+    const dy = end.y - start.y
+    const length = Math.hypot(dx, dy) || 1
+    const tx = dx / length
+    const ty = dy / length
+    // Tangent/normal frame of the segment; the quad is stretched along it.
+    const nx = -ty
+    const ny = tx
+    const cx = (start.x + end.x) * 0.5
+    const cy = (start.y + end.y) * 0.5
+    // Wide at the rim, tight near the core, and long enough to overlap the
+    // neighbouring stamps so the band has no seams or beads.
+    const halfWidth = width * (0.4 + 0.6 * (start.radius + end.radius) * 0.5)
+    const halfLength = length
+    const base = positions.length / 3
+
+    for (let corner = 0; corner < 4; corner += 1) {
+      const along = corner === 0 || corner === 3 ? -halfLength : halfLength
+      const across = corner < 2 ? -halfWidth : halfWidth
+      positions.push(cx + tx * along + nx * across, cy + ty * along + ny * across, 0)
+      uvs.push(corner < 2 ? 0 : 1, corner === 0 || corner === 3 ? 0 : 1)
+    }
+
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3)
   }
 
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 4))
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
   geometry.setIndex(indices)
   return geometry
 }
@@ -309,9 +305,10 @@ export class GalaxyBackdrop {
    */
   private buildArms(layout: GalaxyLayout, armWidth: number): void {
     const glowMaterial = new MeshBasicMaterial({
-      vertexColors: true,
+      map: this.textures.ribbon,
+      color: hexToInt(PALETTE.purple),
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.24,
       blending: AdditiveBlending,
       depthWrite: false,
       side: DoubleSide,
@@ -324,7 +321,7 @@ export class GalaxyBackdrop {
         y: point.y,
         radius: point.radius,
       }))
-      const geometry = buildRibbon(points, armWidth * 1.9, hexToInt(PALETTE.purple), 0.5)
+      const geometry = buildGlowPath(points, armWidth * 1.9)
       this.geometries.push(geometry)
       const mesh = new Mesh(geometry, glowMaterial)
       mesh.position.z = -1.2
@@ -333,9 +330,10 @@ export class GalaxyBackdrop {
 
     // A tighter, brighter ribbon rides the same spines: gas plus starlight.
     const coreMaterial = new MeshBasicMaterial({
-      vertexColors: true,
+      map: this.textures.ribbon,
+      color: hexToInt(PALETTE.blue),
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.4,
       blending: AdditiveBlending,
       depthWrite: false,
       side: DoubleSide,
@@ -347,7 +345,7 @@ export class GalaxyBackdrop {
         y: point.y,
         radius: point.radius,
       }))
-      const geometry = buildRibbon(points, armWidth * 0.6, hexToInt(PALETTE.blue), 0.75)
+      const geometry = buildGlowPath(points, armWidth * 0.6)
       this.geometries.push(geometry)
       const mesh = new Mesh(geometry, coreMaterial)
       mesh.position.z = -0.8
@@ -360,22 +358,23 @@ export class GalaxyBackdrop {
    * normal blending so they subtract light instead of adding it.
    */
   private buildDustLanes(layout: GalaxyLayout): void {
-    const material = new MeshBasicMaterial({
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: false,
-      side: DoubleSide,
-    })
-    this.materials.push(material)
-
     for (const lane of layout.dustLanes) {
+      // Each lane keeps its own opacity, so it needs its own material.
+      const material = new MeshBasicMaterial({
+        map: this.textures.ribbon,
+        color: DUST_COLOUR,
+        transparent: true,
+        opacity: lane.opacity * 0.6,
+        depthWrite: false,
+        side: DoubleSide,
+      })
+      this.materials.push(material)
       const points: RibbonPoint[] = lane.points.map(([x, y]) => ({
         x,
         y,
         radius: Math.hypot(x, y) / Math.max(1, RENDER.space.galaxy.armOuterRadius),
       }))
-      const geometry = buildRibbon(points, lane.width, DUST_COLOUR, lane.opacity)
+      const geometry = buildGlowPath(points, lane.width)
       this.geometries.push(geometry)
       const mesh = new Mesh(geometry, material)
       mesh.position.z = -0.4
