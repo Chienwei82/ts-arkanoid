@@ -14,8 +14,6 @@ import {
   FADE_IN_S,
   LOOKAHEAD_S,
   MASTER_PEAK,
-  PAD_BODY_LEVEL,
-  PAD_AIR_LEVEL,
   STEPS_PER_BAR,
   TICK_MS,
 } from './musicConstants'
@@ -27,11 +25,12 @@ import {
   freqForDegree,
   layersForIntensity,
   maskDensityFor,
+  resolveProfile,
   tempoFor,
   type BarPattern,
   type LayerGates,
 } from './musicPatterns'
-import { DEFAULT_GENRE, type GenreProfile, GENRE_PROFILES } from './genre'
+import type { GenreProfile } from './genre'
 import { mulberry32 } from './musicRng'
 
 /* Envelopes of the percussion/attack voices (seconds / Hz). */
@@ -81,7 +80,7 @@ export class MusicEngine {
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (Ctor === undefined) throw new Error('WebAudio is not available')
     this.ctx = new Ctor()
-    this.profile = profile ?? GENRE_PROFILES.get(DEFAULT_GENRE)
+    this.profile = resolveProfile(profile)
     /* Output: master gain (moderate volume) + compressor acting as a limiter. */
     this.master = this.ctx.createGain()
     this.master.gain.value = 0.0001
@@ -166,10 +165,16 @@ export class MusicEngine {
 
   /**
    * Public fade of the master gain, used by the crossfader when changing
-   * genre. `at` is an AudioContext time (currentTime-based).
+   * genre. `at` defaults to the current AudioContext time, so callers never
+   * need to reach for the private context.
    */
-  fadeMasterAt(target: number, seconds: number, at: number): void {
-    this.fadeMaster(target, seconds, at)
+  fadeMasterAt(target: number, seconds: number, at?: number): void {
+    this.fadeMaster(target, seconds, at ?? this.ctx.currentTime)
+  }
+
+  /** Current AudioContext time, exposed for quantized crossfade scheduling. */
+  now(): number {
+    return this.ctx.currentTime
   }
 
   /**
@@ -299,11 +304,7 @@ export class MusicEngine {
     this.stepDur = 60 / tempoFor(this.intensity, this.profile) / 4
     if (bar % BARS_PER_CHORD === 0) {
       const barDur = this.stepDur * STEPS_PER_BAR
-      this.ensurePad(
-        at,
-        chordForBar(this.seed, bar, this.profile),
-        barDur * BARS_PER_CHORD * 0.9,
-      )
+      this.ensurePad(at, chordForBar(this.seed, bar, this.profile), barDur * BARS_PER_CHORD * 0.9)
     }
   }
 

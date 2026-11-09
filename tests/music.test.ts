@@ -29,7 +29,6 @@ import {
   tempoFor,
 } from '../src/audio/musicPatterns'
 import {
-  DEFAULT_GENRE,
   GENRE_PROFILES,
   GENRE_SEED_COUNT,
   type GenreProfile,
@@ -43,10 +42,8 @@ import { hashSeed, mulberry32, rngForBar } from '../src/audio/musicRng'
  * tests keep their intended meaning (the engine's default audio profile). New
  * genre tests assert against each profile's own ranges below.
  */
-const DEFAULT_AUDIO_PROFILE = GENRE_PROFILES.get(DEFAULT_GENRE)!
-
 const genericProfile: GenreProfile = {
-  id: 'test',
+  id: 'electronic',
   label: 'Test',
   rootFreq: ROOT_FREQ,
   scaleIntervals: [0, 2, 4, 5, 7, 9, 10],
@@ -186,7 +183,11 @@ describe('musical patterns', () => {
 
 describe('intensity → layers / tempo / brightness mapping', () => {
   it('the pad always plays: at intensity 0 there are no more layers', () => {
-    expect(layersForIntensity(0, genericProfile)).toEqual({ bass: false, arpeggio: false, drums: false })
+    expect(layersForIntensity(0, genericProfile)).toEqual({
+      bass: false,
+      arpeggio: false,
+      drums: false,
+    })
   })
   it('the bass enters from 0.2', () => {
     expect(layersForIntensity(THRESHOLD_BASS - 0.01, genericProfile).bass).toBe(false)

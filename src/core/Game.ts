@@ -272,6 +272,7 @@ export class Game implements GameContext {
       isFinalLevel: this.world.levelIndex === this.levels.length - 1,
       helpVisible: this.helpVisible,
       audioEnabled: this.audio?.enabled ?? true,
+      audioGenre: this.audio?.genre ?? 'electronic',
       clearance: this.computeClearance(),
       error: null,
     }

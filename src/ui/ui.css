@@ -451,7 +451,9 @@
   cursor: pointer;
   text-align: left;
   touch-action: manipulation;
-  transition: background 120ms ease, filter 120ms ease;
+  transition:
+    background 120ms ease,
+    filter 120ms ease;
 }
 
 .music-menu__item:hover {

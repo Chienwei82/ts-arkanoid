@@ -8,7 +8,7 @@
  * The engine never learns that audio exists: it only calls `update` every frame
  * and exposes the bus, exactly like it does for the renderer.
  */
-import type { AudioSignals, GameAudio, GenreId, GENRE_IDS } from '../core/audio'
+import { GENRE_IDS, type AudioSignals, type GameAudio, type GenreId } from '../core/audio'
 import type { GameBus, Unsubscribe } from '../core/EventBus'
 import type { GameEventMap } from '../core/events'
 import type { GameStatus } from '../core/types'

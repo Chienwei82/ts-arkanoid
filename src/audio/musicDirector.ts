@@ -51,7 +51,7 @@ export class MusicDirector {
     if (!profile) return
     if (this.engine === null) return // engine not created yet; profile applied on start
     if (!this.crossfader) this.createCrossfader()
-    this.crossfader.request(profile)
+    this.crossfader?.request(profile)
   }
 
   /** Turns the music on (it does not create the AudioContext without a gesture). */
@@ -181,7 +181,7 @@ export class MusicDirector {
         eng.setGenreProfile(profile)
       },
       onFadeMaster: (target: number, seconds: number) => {
-        eng.fadeMasterAt(target, seconds, eng.ctx.currentTime)
+        eng.fadeMasterAt(target, seconds)
       },
     })
   }

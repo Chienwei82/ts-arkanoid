@@ -41,13 +41,7 @@ const GENRE_LABELS: Record<GenreId, string> = {
  * button is clicked, closes with Escape, a click outside or by selecting a
  * genre. Fully keyboard-navigable (tab/arrows, Enter/Space to activate).
  */
-const MusicMenu = ({
-  hud,
-  session,
-}: {
-  readonly hud: HudState
-  readonly session: GameFacade
-}) => {
+const MusicMenu = ({ hud, session }: { readonly hud: HudState; readonly session: GameFacade }) => {
   const [open, setOpen] = React.useState(false)
   const [focusIdx, setFocusIdx] = React.useState(0)
   const menuRef = React.useRef<HTMLDivElement | null>(null)
@@ -58,11 +52,7 @@ const MusicMenu = ({
     if (!open) return
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node | null
-      if (
-        triggerRef.current?.contains(target) ||
-        menuRef.current?.contains(target)
-      )
-        return
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
       setOpen(false)
     }
     const handleKey = (e: KeyboardEvent) => {
@@ -142,7 +132,7 @@ const MusicMenu = ({
           >
             {hud.audioEnabled ? 'Desactivar música' : 'Activar música'}
           </button>
-          {GENRE_IDS.map((genreId, i) => {
+          {GENRE_IDS.map((genreId) => {
             const selected = hud.audioGenre === genreId
             return (
               <button
@@ -153,7 +143,8 @@ const MusicMenu = ({
                 className={`music-menu__item${selected ? ' music-menu__item--selected' : ''}`}
                 onClick={() => selectGenre(genreId)}
               >
-                {GENRE_LABELS[genreId]}{selected ? ' · seleccionado' : ''}
+                {GENRE_LABELS[genreId]}
+                {selected ? ' · seleccionado' : ''}
               </button>
             )
           })}
