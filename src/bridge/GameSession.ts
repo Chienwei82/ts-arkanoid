@@ -1,5 +1,5 @@
 import { SCORING } from '../config/gameConfig'
-import type { GameAudio } from '../core/audio'
+import type { GameAudio, GenreId } from '../core/audio'
 import type { Unsubscribe } from '../core/EventBus'
 import { Game } from '../core/Game'
 import { GAME_CANVAS_CLASS, RendererInitError } from '../core/renderer'
@@ -141,6 +141,16 @@ export class GameSession implements GameFacade {
     return this.audio?.enabled ?? true
   }
 
+  getAudioGenre(): GenreId {
+    return this.audio?.genre ?? 'electronic'
+  }
+
+  setAudioGenre(genreId: GenreId): void {
+    if (this.audio === null) return
+    this.audio.setGenre(genreId)
+    this.publish()
+  }
+
   toggleAudio(): void {
     if (this.audio === null) return
     this.audio.toggle()
@@ -197,6 +207,7 @@ export class GameSession implements GameFacade {
       isFinalLevel: false,
       helpVisible: true,
       audioEnabled: this.audio?.enabled ?? true,
+      audioGenre: this.audio?.genre ?? 'electronic',
       clearance: 0,
       error: null,
     }

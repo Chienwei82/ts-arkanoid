@@ -1,4 +1,5 @@
 import type { PowerUpStatus } from '../entities/types'
+import type { GenreId } from './audio'
 
 export type GameStatus = 'menu' | 'playing' | 'paused' | 'levelComplete' | 'gameOver'
 
@@ -34,6 +35,8 @@ export interface HudState {
   readonly helpVisible: boolean
   /** Procedural audio mute state; the UI renders its toggle from this. */
   readonly audioEnabled: boolean
+  /** Current music genre; the UI renders its selector from this. */
+  readonly audioGenre: GenreId
   /** How much of the destructible wall is cleared (0..1), for the HUD bar. */
   readonly clearance: number
   readonly error: HudError | null

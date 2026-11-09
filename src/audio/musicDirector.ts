@@ -1,15 +1,19 @@
 /**
  * MusicDirector: the only music piece the game knows about. It exposes the
- * lifecycle (start/stop/setIntensity), the on/off toggle (enable/disable/
- * toggle/isEnabled) and the coordination with pause and a hidden tab. The audio
- * engine is created only after the first user gesture (autoplay policy).
+ * lifecycle (start/stop/setIntensity/setGenre), the on/off toggle
+ * (enable/disable/toggle/isEnabled) and the coordination with pause and a
+ * hidden tab. The audio engine is created only after the first user gesture
+ * (autoplay policy).
  */
 import { FADE_OUT_S } from './musicConstants'
 import { clamp01 } from './musicPatterns'
 import { MusicEngine } from './musicEngine'
+import { DEFAULT_GENRE, type GenreId, type GenreProfile, GENRE_PROFILES } from './genre'
+import { GenreCrossfader } from './genreCrossfader'
 
 export class MusicDirector {
   private engine: MusicEngine | null = null
+  private crossfader: GenreCrossfader | null = null
   private enabled = true
   private unlocked = false
   private playing = false
@@ -18,6 +22,7 @@ export class MusicDirector {
   private started = false
   private intensity = 0
   private seed = 1
+  private genre: GenreId = DEFAULT_GENRE
   private disableTimer = 0
 
   /** Call from a user gesture (click, key or touch). */
@@ -28,6 +33,25 @@ export class MusicDirector {
 
   isEnabled(): boolean {
     return this.enabled
+  }
+
+  /** Current genre id. */
+  getGenre(): GenreId {
+    return this.genre
+  }
+
+  /**
+   * Changes genre in caliente with a short crossfade quantized to the bar.
+   * If the engine doesn't exist yet, the genre is stored and applied on start.
+   */
+  setGenre(genreId: GenreId): void {
+    if (genreId === this.genre) return
+    this.genre = genreId
+    const profile = GENRE_PROFILES.get(genreId)
+    if (!profile) return
+    if (this.engine === null) return // engine not created yet; profile applied on start
+    if (!this.crossfader) this.createCrossfader()
+    this.crossfader.request(profile)
   }
 
   /** Turns the music on (it does not create the AudioContext without a gesture). */
@@ -114,6 +138,8 @@ export class MusicDirector {
 
   dispose(): void {
     window.clearTimeout(this.disableTimer)
+    this.crossfader?.dispose()
+    this.crossfader = null
     this.engine?.dispose()
     this.engine = null
     this.playing = false
@@ -136,12 +162,32 @@ export class MusicDirector {
   private ensureEngine(): MusicEngine | null {
     try {
       if (this.engine === null) {
-        this.engine = new MusicEngine()
+        const profile = GENRE_PROFILES.get(this.genre)
+        this.engine = new MusicEngine(profile)
         this.engine.setIntensity(this.intensity)
+        this.createCrossfader()
       }
       return this.engine
     } catch {
       return null
     }
+  }
+
+  private createCrossfader(): void {
+    if (this.crossfader !== null || this.engine === null) return
+    const eng = this.engine
+    this.crossfader = new GenreCrossfader({
+      onSwitchProfile: (profile: GenreProfile) => {
+        eng.setGenreProfile(profile)
+      },
+      onFadeMaster: (target: number, seconds: number) => {
+        eng.fadeMasterAt(target, seconds, eng.ctx.currentTime)
+      },
+    })
+  }
+
+  /** Drives the crossfade state machine each frame. Called by AudioDirector.update. */
+  tickCrossfade(dt: number): void {
+    this.crossfader?.update(dt)
   }
 }

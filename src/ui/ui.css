@@ -405,6 +405,91 @@
   font-size: clamp(0.72rem, 1.4vw, 0.85rem);
 }
 
+/* ---- Music menu popover ------------------------------------------------- */
+
+.music-menu__trigger {
+  position: relative;
+  min-height: 3rem;
+  touch-action: manipulation;
+}
+
+.music-menu__popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background: rgba(11, 18, 48, 0.92);
+  border: 0.12rem solid rgba(53, 196, 255, 0.45);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 0 1.5rem rgba(53, 196, 255, 0.35),
+    inset 0 0 1rem rgba(255, 255, 255, 0.1);
+  z-index: 50;
+  /* Thumb-friendly targets on touch. */
+  min-height: 3.25rem;
+}
+
+.music-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  font-size: clamp(0.85rem, 1.7vw, 1rem);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #d9fbff;
+  background: rgba(53, 196, 255, 0.08);
+  border: 0.12rem solid rgba(53, 196, 255, 0.3);
+  border-radius: 0.6rem;
+  cursor: pointer;
+  text-align: left;
+  touch-action: manipulation;
+  transition: background 120ms ease, filter 120ms ease;
+}
+
+.music-menu__item:hover {
+  background: rgba(53, 196, 255, 0.18);
+  filter: brightness(1.1);
+}
+
+.music-menu__item:focus-visible {
+  outline: 0.18rem solid var(--yellow);
+  outline-offset: 0.15rem;
+}
+
+.music-menu__item--selected {
+  background: rgba(255, 225, 77, 0.15);
+  border-color: var(--yellow);
+  color: #fff;
+}
+
+.music-menu__item--on {
+  background: rgba(77, 255, 166, 0.15);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.music-menu__item--on.music-menu__item--selected {
+  background: rgba(255, 225, 77, 0.25);
+  border-color: var(--yellow);
+}
+
+/* Close popover when clicking outside: handled by a wrapper in GameShell.
+   The popover itself stops propagation so clicking inside doesn't close it. */
+.music-menu__popover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
 /* ---- Touch controls (drag strip + fire button over the canvas) ----------- */
 
 .touch-controls {

@@ -25,6 +25,7 @@ const MENU_HUD: HudState = {
   isFinalLevel: false,
   helpVisible: false,
   audioEnabled: true,
+  audioGenre: 'electronic',
   clearance: 0,
   error: null,
 }
@@ -56,6 +57,8 @@ const createStub = (read: () => HudState): StubFacade => {
     togglePause: () => calls.push('togglePause'),
     toggleHelp: () => calls.push('toggleHelp'),
     isAudioEnabled: () => true,
+    getAudioGenre: () => 'electronic',
+    setAudioGenre: () => calls.push('setAudioGenre'),
     toggleAudio: () => calls.push('toggleAudio'),
     quitToMenu: () => calls.push('quitToMenu'),
     nextLevel: () => calls.push('nextLevel'),
@@ -173,10 +176,14 @@ describe('Screens', () => {
     expect(onSchemeChange).toHaveBeenCalledWith('desktop')
   })
 
-  it('toggles the procedural sound from the menu and the pause panel', () => {
+  it('toggles the procedural sound from the menu', () => {
     const stub = createStub(() => MENU_HUD)
     const { unmount } = renderScreens(MENU_HUD, stub)
+    // The trigger only opens the menu (no audio call yet).
     fireEvent.click(screen.getByRole('button', { name: 'SONIDO: ON' }))
+    expect(stub.calls).toEqual([])
+    // Selecting "Desactivar música" from the menu toggles audio off.
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Desactivar música' }))
     expect(stub.calls).toEqual(['toggleAudio'])
     unmount()
 
