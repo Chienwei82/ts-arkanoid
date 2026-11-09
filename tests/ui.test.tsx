@@ -190,6 +190,46 @@ describe('Screens', () => {
     renderScreens({ ...MENU_HUD, status: 'paused', audioEnabled: false }, stub)
     expect(screen.getByRole('button', { name: 'SONIDO: OFF' })).not.toBeNull()
   })
+
+  it('lists the five genres and marks the selected one', () => {
+    const stub = createStub(() => MENU_HUD)
+    renderScreens(MENU_HUD, stub)
+    fireEvent.click(screen.getByRole('button', { name: 'SONIDO: ON' }))
+
+    for (const label of ['Electrónica', 'Pop', 'Techno', 'Dance', 'Clásica']) {
+      const item = screen.getByRole('menuitemradio', { name: new RegExp(label) })
+      expect(item.getAttribute('aria-checked')).toBe(label === 'Electrónica' ? 'true' : 'false')
+    }
+
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Techno/ }))
+    expect(stub.calls).toContain('setAudioGenre')
+  })
+
+  it('closes the music menu with Escape and with a click outside', () => {
+    const stub = createStub(() => MENU_HUD)
+    const { unmount } = renderScreens(MENU_HUD, stub)
+    fireEvent.click(screen.getByRole('button', { name: 'SONIDO: ON' }))
+    expect(screen.getByRole('menu')).not.toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'SONIDO: ON' }))
+    expect(screen.getByRole('menu')).not.toBeNull()
+    fireEvent.click(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
+    unmount()
+  })
+
+  it('moves through the genre list with the arrow keys', () => {
+    const stub = createStub(() => MENU_HUD)
+    renderScreens(MENU_HUD, stub)
+    fireEvent.click(screen.getByRole('button', { name: 'SONIDO: ON' }))
+    const menu = screen.getByRole('menu')
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    fireEvent.keyDown(menu, { key: 'Enter' })
+    // Enter activates the focused genre (Pop, one step down from Electrónica).
+    expect(stub.calls).toContain('setAudioGenre')
+  })
 })
 
 describe('HelpScreen', () => {

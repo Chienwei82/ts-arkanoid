@@ -56,7 +56,10 @@ const MusicMenu = ({ hud, session }: { readonly hud: HudState; readonly session:
       setOpen(false)
     }
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
     }
     document.addEventListener('click', handleClick)
     document.addEventListener('keydown', handleKey)
@@ -71,6 +74,11 @@ const MusicMenu = ({ hud, session }: { readonly hud: HudState; readonly session:
     setOpen(false)
   }
 
+  const closeMenu = () => {
+    setOpen(false)
+    triggerRef.current?.focus()
+  }
+
   const selectGenre = (genreId: GenreId) => {
     session.setAudioGenre(genreId)
     setOpen(false)
@@ -78,7 +86,7 @@ const MusicMenu = ({ hud, session }: { readonly hud: HudState; readonly session:
 
   const keyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
-      setOpen(false)
+      closeMenu()
       return
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {

@@ -276,6 +276,31 @@ describe('genres and profiles', () => {
       }
     }
   })
+
+  it('the registry exposes the catalogue, the default and the lookup', () => {
+    const registry = new GenreRegistry()
+    expect([...registry.all()].sort()).toEqual([...GENRE_PROFILES.keys()].sort())
+    expect(registry.default()).toBe('electronic')
+    expect(registry.get('pop')!.label).toBe('Pop')
+    expect(registry.get('electronic')).toBe(GENRE_PROFILES.get('electronic'))
+  })
+
+  it('pickSeed shifts once when the roll hits the previous seed', () => {
+    const registry = new GenreRegistry()
+    // Force the roll onto the first seed and ask for the same previous seed:
+    // the pick must move to the next candidate instead of repeating it.
+    const first = registry.pickSeed('electronic', () => 0).seed
+    const shifted = registry.pickSeed('electronic', () => 0, first)
+    expect(shifted.seed).not.toBe(first)
+    expect(shifted.changed).toBe(false)
+    // A different previous seed leaves the roll untouched.
+    const other = registry.pickSeed('electronic', () => 0, -1)
+    expect(other.seed).toBe(first)
+    expect(other.changed).toBe(true)
+    // Unknown genre throws loudly instead of silently falling back.
+    const empty = new GenreRegistry(new Map())
+    expect(() => empty.pickSeed('electronic', () => 0)).toThrow(/unknown genre/)
+  })
 })
 
 describe('smoothing (IntensityTracker)', () => {
