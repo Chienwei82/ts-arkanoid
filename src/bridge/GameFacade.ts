@@ -1,4 +1,5 @@
 import type { HudState } from '../core/types'
+import type { GenreId } from '../core/audio'
 import type { TouchInput } from '../systems/TouchInput'
 
 /**
@@ -27,6 +28,10 @@ export interface GameFacade {
   isAudioEnabled(): boolean
   /** Flips the audio mute state and persists the preference. */
   toggleAudio(): void
+  /** Current music genre. */
+  getAudioGenre(): GenreId
+  /** Selects a music genre and persists the choice. */
+  setAudioGenre(genreId: GenreId): void
   quitToMenu(): void
   nextLevel(): void
   /** Full page reload, the only reliable recovery after a lost GL context. */

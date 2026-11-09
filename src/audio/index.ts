@@ -41,3 +41,16 @@ export { AudioDirector } from './audioDirector'
 export type { AudioDirectorOptions } from './audioDirector'
 export { createLocalStorageAudio, createMemoryAudio } from './preferences'
 export type { AudioPreferenceStore } from './preferences'
+export {
+  type GenreId,
+  type GenreProfile,
+  GENRE_IDS,
+  DEFAULT_GENRE,
+  GENRE_PROFILES,
+  GENRE_SEED_COUNT,
+  GenreRegistry,
+  type SeedPickResult,
+} from './genre'
+export { GenreCrossfader, CROSSFADE_DIP_S, CROSSFADE_RECOVER_S } from './genreCrossfader'
+export { createLocalStorageGenre, createMemoryGenre } from './genrePreferences'
+export type { GenrePreferenceStore } from './genrePreferences'

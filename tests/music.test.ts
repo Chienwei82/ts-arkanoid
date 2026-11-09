@@ -28,7 +28,49 @@ import {
   songScore,
   tempoFor,
 } from '../src/audio/musicPatterns'
+import {
+  GENRE_PROFILES,
+  GENRE_SEED_COUNT,
+  type GenreProfile,
+  GenreRegistry,
+  genreSeedRng,
+} from '../src/audio/genre'
 import { hashSeed, mulberry32, rngForBar } from '../src/audio/musicRng'
+
+/**
+ * Test profile matching the legacy global constants, so the original mapping
+ * tests keep their intended meaning (the engine's default audio profile). New
+ * genre tests assert against each profile's own ranges below.
+ */
+const genericProfile: GenreProfile = {
+  id: 'electronic',
+  label: 'Test',
+  rootFreq: ROOT_FREQ,
+  scaleIntervals: [0, 2, 4, 5, 7, 9, 10],
+  melodyDegrees: [0, 1, 2, 4, 5],
+  chordRootDegrees: [0, 3, 5],
+  chordProgressions: [[0, 3, 5]],
+  bpmMin: 84,
+  bpmMax: 120,
+  cutoffMinHz: 700,
+  cutoffMaxHz: 4200,
+  thresholdBass: THRESHOLD_BASS,
+  thresholdArpeggio: THRESHOLD_ARPEGIO,
+  thresholdDrums: THRESHOLD_DRUMS,
+  mix: { padGain: 0.14, bassGain: 0.24, arpGain: 0.14, drumGain: 0.2 },
+  padAttackS: 1.2,
+  padReleaseS: 2.0,
+  padDetuneCents: 6,
+  oscillators: { pad: 'sine', bass: 'triangle', arpeggio: 'triangle', kick: 'sine' },
+  groove: {
+    kickSteps: [[0, 8]],
+    hatSteps: [[2, 6, 10, 14]],
+    bassSteps: [[0]],
+    swing: [false],
+    swingS: 0,
+  },
+  seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+}
 
 const SCALE_SEMITONES = new Set<number>(SCALE_INTERVALS)
 const PENTA_INDICES = new Set<number>(MELODY_DEGREES)
@@ -40,6 +82,12 @@ function semitonesFromRoot(freq: number): number {
 function inScale(freq: number): boolean {
   const semi = Math.round(semitonesFromRoot(freq))
   return SCALE_SEMITONES.has(((semi % 12) + 12) % 12)
+}
+
+/** Checks a frequency against a genre profile's own interval set (octave-agnostic). */
+function inGenreScale(freq: number, profile: GenreProfile): boolean {
+  const semi = ((Math.round(semitonesFromRoot(freq)) % 12) + 12) % 12
+  return profile.scaleIntervals.some((i) => ((i % 12) + 12) % 12 === semi)
 }
 const ALL_OFF: IntensitySignals = { danger: 0, level: 0, clearance: 0, combo: 0 }
 const ALL_ON: IntensitySignals = { danger: 1, level: 1, clearance: 1, combo: 12 }
@@ -135,34 +183,123 @@ describe('musical patterns', () => {
 
 describe('intensity → layers / tempo / brightness mapping', () => {
   it('the pad always plays: at intensity 0 there are no more layers', () => {
-    expect(layersForIntensity(0)).toEqual({ bass: false, arpeggio: false, drums: false })
+    expect(layersForIntensity(0, genericProfile)).toEqual({
+      bass: false,
+      arpeggio: false,
+      drums: false,
+    })
   })
   it('the bass enters from 0.2', () => {
-    expect(layersForIntensity(THRESHOLD_BASS - 0.01).bass).toBe(false)
-    expect(layersForIntensity(THRESHOLD_BASS).bass).toBe(true)
+    expect(layersForIntensity(THRESHOLD_BASS - 0.01, genericProfile).bass).toBe(false)
+    expect(layersForIntensity(THRESHOLD_BASS, genericProfile).bass).toBe(true)
   })
   it('the arpeggio enters from 0.4 and the drums from 0.6', () => {
-    expect(layersForIntensity(THRESHOLD_ARPEGIO - 0.01).arpeggio).toBe(false)
-    expect(layersForIntensity(THRESHOLD_ARPEGIO).arpeggio).toBe(true)
-    expect(layersForIntensity(THRESHOLD_DRUMS - 0.01).drums).toBe(false)
-    expect(layersForIntensity(THRESHOLD_DRUMS).drums).toBe(true)
+    expect(layersForIntensity(THRESHOLD_ARPEGIO - 0.01, genericProfile).arpeggio).toBe(false)
+    expect(layersForIntensity(THRESHOLD_ARPEGIO, genericProfile).arpeggio).toBe(true)
+    expect(layersForIntensity(THRESHOLD_DRUMS - 0.01, genericProfile).drums).toBe(false)
+    expect(layersForIntensity(THRESHOLD_DRUMS, genericProfile).drums).toBe(true)
   })
   it('the tempo goes from 84 to 120 BPM and is monotonic', () => {
-    expect(tempoFor(0)).toBe(BPM_MIN)
-    expect(tempoFor(1)).toBe(BPM_MAX)
-    expect(tempoFor(0.5)).toBeCloseTo((BPM_MIN + BPM_MAX) / 2)
-    expect(tempoFor(2)).toBe(BPM_MAX) // clamped
-    expect(tempoFor(0.3)).toBeLessThan(tempoFor(0.7))
+    expect(tempoFor(0, genericProfile)).toBe(BPM_MIN)
+    expect(tempoFor(1, genericProfile)).toBe(BPM_MAX)
+    expect(tempoFor(0.5, genericProfile)).toBeCloseTo((BPM_MIN + BPM_MAX) / 2)
+    expect(tempoFor(2, genericProfile)).toBe(BPM_MAX) // clamped
+    expect(tempoFor(0.3, genericProfile)).toBeLessThan(tempoFor(0.7, genericProfile))
   })
   it('brightness (cutoff) rises with intensity', () => {
-    expect(cutoffFor(0)).toBe(CUTOFF_MIN_HZ)
-    expect(cutoffFor(1)).toBe(CUTOFF_MAX_HZ)
-    expect(cutoffFor(0.3)).toBeLessThan(cutoffFor(0.8))
+    expect(cutoffFor(0, genericProfile)).toBe(CUTOFF_MIN_HZ)
+    expect(cutoffFor(1, genericProfile)).toBe(CUTOFF_MAX_HZ)
+    expect(cutoffFor(0.3, genericProfile)).toBeLessThan(cutoffFor(0.8, genericProfile))
   })
   it('note density grows from the minimum with intensity', () => {
-    expect(maskDensityFor(THRESHOLD_ARPEGIO)).toBeCloseTo(MASK_DENSITY_MIN)
-    expect(maskDensityFor(1)).toBe(1)
-    expect(maskDensityFor(0.5)).toBeLessThan(maskDensityFor(0.9))
+    expect(maskDensityFor(THRESHOLD_ARPEGIO, genericProfile)).toBeCloseTo(MASK_DENSITY_MIN)
+    expect(maskDensityFor(1, genericProfile)).toBe(1)
+    expect(maskDensityFor(0.5, genericProfile)).toBeLessThan(maskDensityFor(0.9, genericProfile))
+  })
+})
+
+describe('genres and profiles', () => {
+  it('each profile exposes its own BPM and filter ranges', () => {
+    for (const profile of GENRE_PROFILES.values()) {
+      expect(profile.bpmMin).toBeLessThan(profile.bpmMax)
+      expect(profile.cutoffMinHz).toBeLessThan(profile.cutoffMaxHz)
+      expect(profile.thresholdBass).toBeGreaterThanOrEqual(0)
+      expect(profile.thresholdArpeggio).toBeGreaterThanOrEqual(0)
+      expect(profile.thresholdDrums).toBeGreaterThanOrEqual(0)
+      expect(profile.thresholdDrums).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('each genre has exactly 10 fixed seeds', () => {
+    for (const profile of GENRE_PROFILES.values()) {
+      expect(profile.seeds).toHaveLength(GENRE_SEED_COUNT)
+      // Names are stable constants.
+      expect(profile.seeds[0]).toBeGreaterThan(0)
+    }
+  })
+
+  it('every arpeggio note of a genre falls inside that genre scale', () => {
+    for (const profile of GENRE_PROFILES.values()) {
+      for (const seed of profile.seeds) {
+        const pattern = barPattern(seed, 0, profile)
+        for (const s of pattern.arpeggio) {
+          expect(inGenreScale(freqForDegree(s.degree, profile), profile)).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('seed selection never returns the previous seed twice in a row', () => {
+    const rng = mulberry32(7)
+    const registry = new GenreRegistry(GENRE_PROFILES)
+    for (const genreId of GENRE_PROFILES.keys()) {
+      let previous: number | null = null
+      for (let i = 0; i < 500; i += 1) {
+        const picked = registry.pickSeed(genreId, rng, previous)
+        if (previous !== null) {
+          expect(picked.seed).not.toBe(previous)
+        }
+        previous = picked.seed
+      }
+    }
+  })
+
+  it('the same (genre, seed) always yields the same material', () => {
+    for (const genreId of GENRE_PROFILES.keys()) {
+      const profile = GENRE_PROFILES.get(genreId)!
+      for (const seed of profile.seeds) {
+        const rngA = genreSeedRng(genreId, seed)
+        const rngB = genreSeedRng(genreId, seed)
+        for (let i = 0; i < 30; i += 1) {
+          expect(rngA()).toBe(rngB())
+        }
+      }
+    }
+  })
+
+  it('the registry exposes the catalogue, the default and the lookup', () => {
+    const registry = new GenreRegistry()
+    expect([...registry.all()].sort()).toEqual([...GENRE_PROFILES.keys()].sort())
+    expect(registry.default()).toBe('electronic')
+    expect(registry.get('pop')!.label).toBe('Pop')
+    expect(registry.get('electronic')).toBe(GENRE_PROFILES.get('electronic'))
+  })
+
+  it('pickSeed shifts once when the roll hits the previous seed', () => {
+    const registry = new GenreRegistry()
+    // Force the roll onto the first seed and ask for the same previous seed:
+    // the pick must move to the next candidate instead of repeating it.
+    const first = registry.pickSeed('electronic', () => 0).seed
+    const shifted = registry.pickSeed('electronic', () => 0, first)
+    expect(shifted.seed).not.toBe(first)
+    expect(shifted.changed).toBe(false)
+    // A different previous seed leaves the roll untouched.
+    const other = registry.pickSeed('electronic', () => 0, -1)
+    expect(other.seed).toBe(first)
+    expect(other.changed).toBe(true)
+    // Unknown genre throws loudly instead of silently falling back.
+    const empty = new GenreRegistry(new Map())
+    expect(() => empty.pickSeed('electronic', () => 0)).toThrow(/unknown genre/)
   })
 })
 

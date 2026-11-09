@@ -139,9 +139,29 @@ describe('GameSession bridge', () => {
   it('is inert for audio when no system was injected', () => {
     const session = createSession()
     expect(session.isAudioEnabled()).toBe(true)
+    expect(session.getAudioGenre()).toBe('electronic')
     expect(() => {
       session.toggleAudio()
+      session.setAudioGenre('pop')
     }).not.toThrow()
+    expect(session.getSnapshot().audioGenre).toBe('electronic')
+  })
+
+  it('exposes and changes the music genre through the facade', () => {
+    const spy = createAudioSpy()
+    const session = new GameSession({
+      levels: LEVELS,
+      storage: createMemoryRecord(0),
+      audio: spy.audio,
+    })
+    expect(session.getAudioGenre()).toBe('electronic')
+
+    session.attach(null)
+    session.setAudioGenre('techno')
+
+    expect(session.getAudioGenre()).toBe('techno')
+    expect(session.getSnapshot().audioGenre).toBe('techno')
+    expect(spy.genreCalls).toEqual(['techno'])
   })
 
   it('publishes a friendly error when the renderer cannot start', () => {

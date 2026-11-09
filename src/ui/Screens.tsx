@@ -1,5 +1,8 @@
+import React from 'react'
 import type { GameFacade } from '../bridge'
 import type { HudState } from '../core/types'
+import type { GenreId } from '../core/audio'
+import { GENRE_IDS } from '../core/audio'
 import type { ControlScheme } from '../platform/ControlScheme'
 import { ControlSchemePicker } from './ControlSchemePicker'
 import { HelpScreen } from './HelpScreen'
@@ -25,24 +28,139 @@ const CONTROLS: readonly string[] = [
   'H para abrir o cerrar la guía de módulos y cascos',
 ]
 
-/** Arcade toggle for the procedural sound (music and effects share it). */
-const SoundToggle = ({
-  hud,
-  session,
-}: {
-  readonly hud: HudState
-  readonly session: GameFacade
-}) => (
-  <div className="panel__settings">
-    <span className="panel__settings-label">Sonido</span>
-    <PaperButton
-      label={hud.audioEnabled ? 'SONIDO: ON' : 'SONIDO: OFF'}
-      tone={hud.audioEnabled ? 'primary' : 'ghost'}
-      pressed={hud.audioEnabled}
-      onClick={() => session.toggleAudio()}
-    />
-  </div>
-)
+const GENRE_LABELS: Record<GenreId, string> = {
+  electronic: 'Electrónica',
+  pop: 'Pop',
+  techno: 'Techno',
+  dance: 'Dance',
+  classic: 'Clásica',
+}
+
+/**
+ * Music menu popover: toggle on/off plus genre grid. Opens when the SONIDO
+ * button is clicked, closes with Escape, a click outside or by selecting a
+ * genre. Fully keyboard-navigable (tab/arrows, Enter/Space to activate).
+ */
+const MusicMenu = ({ hud, session }: { readonly hud: HudState; readonly session: GameFacade }) => {
+  const [open, setOpen] = React.useState(false)
+  const [focusIdx, setFocusIdx] = React.useState(0)
+  const menuRef = React.useRef<HTMLDivElement | null>(null)
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null)
+
+  // Close on click outside or Escape key.
+  React.useEffect(() => {
+    if (!open) return
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node | null
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+    document.addEventListener('click', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('click', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  const toggleAudio = () => {
+    session.toggleAudio()
+    setOpen(false)
+  }
+
+  const closeMenu = () => {
+    setOpen(false)
+    triggerRef.current?.focus()
+  }
+
+  const selectGenre = (genreId: GenreId) => {
+    session.setAudioGenre(genreId)
+    setOpen(false)
+  }
+
+  const keyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      closeMenu()
+      return
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault()
+      setFocusIdx((i) => (i + 1) % GENRE_IDS.length)
+      return
+    }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault()
+      setFocusIdx((i) => (i + GENRE_IDS.length - 1) % GENRE_IDS.length)
+      return
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      selectGenre(GENRE_IDS[focusIdx])
+    }
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="btn btn--ghost music-menu__trigger"
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen(!open)
+        }}
+        onKeyDown={keyDown}
+      >
+        {hud.audioEnabled ? 'SONIDO: ON' : 'SONIDO: OFF'}
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          className="music-menu__popover"
+          role="menu"
+          aria-label="Música"
+          onKeyDown={keyDown}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={`music-menu__item${hud.audioEnabled ? ' music-menu__item--on' : ''}`}
+            aria-checked={hud.audioEnabled}
+            onClick={toggleAudio}
+          >
+            {hud.audioEnabled ? 'Desactivar música' : 'Activar música'}
+          </button>
+          {GENRE_IDS.map((genreId) => {
+            const selected = hud.audioGenre === genreId
+            return (
+              <button
+                key={genreId}
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                className={`music-menu__item${selected ? ' music-menu__item--selected' : ''}`}
+                onClick={() => selectGenre(genreId)}
+              >
+                {GENRE_LABELS[genreId]}
+                {selected ? ' · seleccionado' : ''}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
+}
 
 /** Full-screen paper panel for a fatal engine/renderer failure. */
 export const EngineErrorScreen = ({ hud, session }: ErrorScreenProps) => {
@@ -86,7 +204,7 @@ export const Screens = ({ hud, session, scheme, onSchemeChange }: ScreensProps) 
               <span className="panel__settings-label">Controles</span>
               <ControlSchemePicker scheme={scheme} onSelect={onSchemeChange} compact />
             </div>
-            <SoundToggle hud={hud} session={session} />
+            <MusicMenu hud={hud} session={session} />
           </>
         )}
 
@@ -108,7 +226,7 @@ export const Screens = ({ hud, session, scheme, onSchemeChange }: ScreensProps) 
               <span className="panel__settings-label">Controles</span>
               <ControlSchemePicker scheme={scheme} onSelect={onSchemeChange} compact />
             </div>
-            <SoundToggle hud={hud} session={session} />
+            <MusicMenu hud={hud} session={session} />
           </>
         )}
 

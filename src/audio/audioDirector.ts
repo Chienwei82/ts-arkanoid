@@ -8,10 +8,11 @@
  * The engine never learns that audio exists: it only calls `update` every frame
  * and exposes the bus, exactly like it does for the renderer.
  */
-import type { AudioSignals, GameAudio } from '../core/audio'
+import { GENRE_IDS, type AudioSignals, type GameAudio, type GenreId } from '../core/audio'
 import type { GameBus, Unsubscribe } from '../core/EventBus'
 import type { GameEventMap } from '../core/events'
 import type { GameStatus } from '../core/types'
+import { createLocalStorageGenre, type GenrePreferenceStore } from './genrePreferences'
 import { IntensityTracker } from './intensityTracker'
 import { LEVEL_SONG_SEEDS, MENU_SONG_SEED } from './musicConstants'
 import { MusicDirector } from './musicDirector'
@@ -21,6 +22,8 @@ import { SoundFX } from './sound'
 export interface AudioDirectorOptions {
   /** Mute persistence; defaults to localStorage. */
   readonly preferences?: AudioPreferenceStore
+  /** Genre persistence; defaults to localStorage. */
+  readonly genrePreferences?: GenrePreferenceStore
 }
 
 export class AudioDirector implements GameAudio {
@@ -28,6 +31,7 @@ export class AudioDirector implements GameAudio {
   private readonly music = new MusicDirector()
   private readonly intensity = new IntensityTracker()
   private readonly store: AudioPreferenceStore
+  private readonly genreStore: GenrePreferenceStore
   private unsubscribers: Unsubscribe[] = []
   private audioOn: boolean
   private levelIndex = 0
@@ -36,7 +40,12 @@ export class AudioDirector implements GameAudio {
 
   constructor(options: AudioDirectorOptions = {}) {
     this.store = options.preferences ?? createLocalStorageAudio()
+    this.genreStore = options.genrePreferences ?? createLocalStorageGenre()
     this.audioOn = this.store.load()
+    const savedGenre = this.genreStore.load()
+    if (GENRE_IDS.includes(savedGenre as GenreId)) {
+      this.music.setGenre(savedGenre as GenreId)
+    }
     this.applyMute(this.audioOn)
     // Autoplay policy: one-shot listeners on the first real gesture.
     window.addEventListener('pointerdown', this.onGesture, { once: true })
@@ -47,6 +56,11 @@ export class AudioDirector implements GameAudio {
 
   get enabled(): boolean {
     return this.audioOn
+  }
+
+  /** Current genre id; surfaced in the HUD so React can render the selector. */
+  get genre(): GenreId {
+    return this.music.getGenre()
   }
 
   private readonly onGesture = (): void => {
@@ -95,9 +109,17 @@ export class AudioDirector implements GameAudio {
     return this.audioOn
   }
 
+  /** Selects a genre, persists it and crossfades if music is on. */
+  setGenre(genreId: GenreId): void {
+    if (genreId === this.genre) return
+    this.genreStore.save(genreId)
+    this.music.setGenre(genreId)
+  }
+
   /** Per-frame intensity from the engine, smoothed and handed to the music. */
   update(dt: number, signals: AudioSignals): void {
     this.music.setIntensity(this.intensity.update(dt, signals))
+    this.music.tickCrossfade(dt)
   }
 
   dispose(): void {

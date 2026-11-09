@@ -16,6 +16,18 @@ export interface AudioSignals {
   readonly combo: number
 }
 
+/** Music genre id: part of the GameAudio contract, kept in core to avoid
+ *  a circular dependency with src/audio. */
+export type GenreId = 'electronic' | 'pop' | 'techno' | 'dance' | 'classic'
+
+export const GENRE_IDS: readonly GenreId[] = [
+  'electronic',
+  'pop',
+  'techno',
+  'dance',
+  'classic',
+] as const
+
 /**
  * Audio boundary: the engine drives `update` every frame, while the bridge/UI
  * own the rest of the lifecycle (unlock, mute, dispose). The engine depends on
@@ -25,6 +37,8 @@ export interface AudioSignals {
 export interface GameAudio {
   /** Mute state; surfaced in the HUD so React can render its toggle. */
   readonly enabled: boolean
+  /** Current music genre; surfaced in the HUD so React can render its selector. */
+  readonly genre: GenreId
   /** Subscribes to the engine event bus (SFX, intensity pulses, lifecycle). */
   bind(bus: GameBus): void
   unbind(): void
@@ -32,6 +46,8 @@ export interface GameAudio {
   unlock(): void
   /** Flips mute; returns the new state so callers can persist it. */
   toggle(): boolean
+  /** Selects a music genre and persists the choice. */
+  setGenre(genreId: GenreId): void
   /** Per-frame intensity feed from the engine. */
   update(dt: number, signals: AudioSignals): void
   dispose(): void

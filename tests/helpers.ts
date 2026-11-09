@@ -1,4 +1,4 @@
-import type { AudioSignals, GameAudio } from '../src/core/audio'
+import type { AudioSignals, GameAudio, GenreId } from '../src/core/audio'
 import { EventBus, type GameBus } from '../src/core/EventBus'
 import type { GameEventMap, GameEventName } from '../src/core/events'
 import type { Ball } from '../src/entities/types'
@@ -77,17 +77,23 @@ export interface AudioSpy {
   readonly signals: AudioSignals[]
   readonly buses: (GameBus | null)[]
   toggles: number
+  genreCalls: GenreId[]
 }
 
 export const createAudioSpy = (initial = true): AudioSpy => {
   let enabled = initial
+  let genre: GenreId = 'electronic'
   const spy: AudioSpy = {
     signals: [],
     buses: [],
     toggles: 0,
+    genreCalls: [],
     audio: {
       get enabled() {
         return enabled
+      },
+      get genre() {
+        return genre
       },
       bind: (bus) => {
         spy.buses.push(bus)
@@ -100,6 +106,10 @@ export const createAudioSpy = (initial = true): AudioSpy => {
         enabled = !enabled
         spy.toggles += 1
         return enabled
+      },
+      setGenre: (next: GenreId) => {
+        genre = next
+        spy.genreCalls.push(next)
       },
       update: (_dt, signals) => {
         spy.signals.push(signals)

@@ -6,21 +6,14 @@
  * next bar with ramps, so no transition ever sounds abrupt.
  */
 import {
-  ARP_GAIN,
   BARS_PER_CHORD,
-  BASS_GAIN,
   CUTOFF_MIN_HZ,
   DELAY_FEEDBACK,
   DELAY_FILTER_HZ,
   DELAY_TIME_S,
-  DRUM_GAIN,
   FADE_IN_S,
   LOOKAHEAD_S,
   MASTER_PEAK,
-  PAD_ATTACK_S,
-  PAD_DETUNE_CENTS,
-  PAD_GAIN,
-  PAD_RELEASE_S,
   STEPS_PER_BAR,
   TICK_MS,
 } from './musicConstants'
@@ -32,10 +25,12 @@ import {
   freqForDegree,
   layersForIntensity,
   maskDensityFor,
+  resolveProfile,
   tempoFor,
   type BarPattern,
   type LayerGates,
 } from './musicPatterns'
+import type { GenreProfile } from './genre'
 import { mulberry32 } from './musicRng'
 
 /* Envelopes of the percussion/attack voices (seconds / Hz). */
@@ -69,6 +64,8 @@ export class MusicEngine {
   private step = 0
   private seed = 1
   private intensity = 0
+  private profile: GenreProfile
+  private pendingProfile: GenreProfile | null = null
   private stepDur = 60 / tempoFor(0) / 4
   private gates: LayerGates = { bass: false, arpeggio: false, drums: false }
   private density = maskDensityFor(0)
@@ -77,12 +74,13 @@ export class MusicEngine {
   private hatCount = 0
   private _running = false
 
-  constructor() {
+  constructor(profile?: GenreProfile) {
     const Ctor =
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (Ctor === undefined) throw new Error('WebAudio is not available')
     this.ctx = new Ctor()
+    this.profile = resolveProfile(profile)
     /* Output: master gain (moderate volume) + compressor acting as a limiter. */
     this.master = this.ctx.createGain()
     this.master.gain.value = 0.0001
@@ -95,11 +93,11 @@ export class MusicEngine {
     this.master.connect(this.compressor)
     this.compressor.connect(this.ctx.destination)
 
-    this.padBus = this.createBus(PAD_GAIN)
-    this.bassBus = this.createBus(BASS_GAIN)
-    this.arpBus = this.createBus(ARP_GAIN)
+    this.padBus = this.createBus(this.profile.mix.padGain)
+    this.bassBus = this.createBus(this.profile.mix.bassGain)
+    this.arpBus = this.createBus(this.profile.mix.arpGain)
     this.drumBus = this.ctx.createGain()
-    this.drumBus.gain.value = DRUM_GAIN
+    this.drumBus.gain.value = this.profile.mix.drumGain
     this.drumBus.connect(this.master)
 
     /* Simple "reverb": a filtered feedback delay over the arpeggio. */
@@ -133,7 +131,7 @@ export class MusicEngine {
     this.step = 0
     this.pattern = null
     this.padUntil = 0
-    this.stepDur = 60 / tempoFor(this.intensity) / 4
+    this.stepDur = 60 / tempoFor(this.intensity, this.profile) / 4
     void this.ctx.resume()
     const t = this.ctx.currentTime
     this.nextStepTime = t + 0.08
@@ -152,7 +150,7 @@ export class MusicEngine {
     const barDur = this.stepDur * STEPS_PER_BAR
     this.ensurePad(
       t,
-      chordForBar(this.seed, Math.floor(this.step / STEPS_PER_BAR)),
+      chordForBar(this.seed, Math.floor(this.step / STEPS_PER_BAR), this.profile),
       barDur * BARS_PER_CHORD * 0.9,
     )
     this.startScheduler()
@@ -166,6 +164,20 @@ export class MusicEngine {
   }
 
   /**
+   * Public fade of the master gain, used by the crossfader when changing
+   * genre. `at` defaults to the current AudioContext time, so callers never
+   * need to reach for the private context.
+   */
+  fadeMasterAt(target: number, seconds: number, at?: number): void {
+    this.fadeMaster(target, seconds, at ?? this.ctx.currentTime)
+  }
+
+  /** Current AudioContext time, exposed for quantized crossfade scheduling. */
+  now(): number {
+    return this.ctx.currentTime
+  }
+
+  /**
    * Soft close: tonic triad + descending arpeggio + long fade. Used when the
    * run ends (win or lose) instead of cutting the sound off.
    */
@@ -175,7 +187,7 @@ export class MusicEngine {
     this.stopScheduler()
     const barDur = this.stepDur * STEPS_PER_BAR
     const t = this.ctx.currentTime + 0.05
-    const chord = chordForBar(this.seed, Math.floor(this.step / STEPS_PER_BAR))
+    const chord = chordForBar(this.seed, Math.floor(this.step / STEPS_PER_BAR), this.profile)
     this.schedulePad(t, barDur * 1.4, chord)
     this.scheduleBass(t, barDur, chord[0] ?? 0)
     this.scheduleArp(t + barDur * 0.25, barDur * 0.9, (chord[2] ?? 0) + 7, 0.5)
@@ -186,6 +198,20 @@ export class MusicEngine {
   /** New target intensity: applied with ramps at the start of the bar. */
   setIntensity(value: number): void {
     this.intensity = clamp01(value)
+  }
+
+  /**
+   * Queues a genre profile change. It is applied at the start of the next bar
+   * (quantized to the compás) so the transition never cuts audio abruptly.
+   */
+  setGenreProfile(profile: GenreProfile): void {
+    if (profile.id === this.profile.id) return
+    this.pendingProfile = profile
+  }
+
+  /** Returns the currently active genre profile. */
+  getGenreProfile(): GenreProfile {
+    return this.profile
   }
 
   /** Hidden tab: suspends the context and truly saves CPU. */
@@ -263,12 +289,22 @@ export class MusicEngine {
 
   /** At the start of every bar: new pattern + quantized intensity adjustment. */
   private beginBar(bar: number, at: number): void {
-    this.pattern = barPattern(this.seed, bar)
+    // Apply a queued genre change at the bar boundary (quantized to the compás).
+    if (this.pendingProfile !== null) {
+      this.profile = this.pendingProfile
+      this.pendingProfile = null
+      // Re-create buses with the new profile's mix gains.
+      this.padBus.gain.setTargetAtTime(this.profile.mix.padGain, at, 0.1)
+      this.bassBus.gain.setTargetAtTime(this.profile.mix.bassGain, at, 0.1)
+      this.arpBus.gain.setTargetAtTime(this.profile.mix.arpGain, at, 0.1)
+      this.drumBus.gain.setTargetAtTime(this.profile.mix.drumGain, at, 0.1)
+    }
+    this.pattern = barPattern(this.seed, bar, this.profile)
     this.applyIntensity(at)
-    this.stepDur = 60 / tempoFor(this.intensity) / 4
+    this.stepDur = 60 / tempoFor(this.intensity, this.profile) / 4
     if (bar % BARS_PER_CHORD === 0) {
       const barDur = this.stepDur * STEPS_PER_BAR
-      this.ensurePad(at, this.pattern.chord, barDur * BARS_PER_CHORD * 0.9)
+      this.ensurePad(at, chordForBar(this.seed, bar, this.profile), barDur * BARS_PER_CHORD * 0.9)
     }
   }
 
@@ -315,14 +351,15 @@ export class MusicEngine {
   /** Applies intensity → tempo, brightness and layer gains, all with ramps. */
   private applyIntensity(at: number): void {
     const v = this.intensity
-    const cutoff = cutoffFor(v)
+    const p = this.profile
+    const cutoff = cutoffFor(v, p)
     for (const f of this.brightness) f.frequency.setTargetAtTime(cutoff, at, 0.4)
-    this.gates = layersForIntensity(v)
-    this.density = maskDensityFor(v)
-    this.padBus.gain.setTargetAtTime(PAD_GAIN * (0.75 + 0.25 * v), at, 0.6)
-    this.bassBus.gain.setTargetAtTime(this.gates.bass ? BASS_GAIN : 0.0001, at, 0.6)
-    this.arpBus.gain.setTargetAtTime(this.gates.arpeggio ? ARP_GAIN : 0.0001, at, 0.6)
-    this.drumBus.gain.setTargetAtTime(this.gates.drums ? DRUM_GAIN : 0.0001, at, 0.6)
+    this.gates = layersForIntensity(v, p)
+    this.density = maskDensityFor(v, p)
+    this.padBus.gain.setTargetAtTime(p.mix.padGain * (0.75 + 0.25 * v), at, 0.6)
+    this.bassBus.gain.setTargetAtTime(this.gates.bass ? p.mix.bassGain : 0.0001, at, 0.6)
+    this.arpBus.gain.setTargetAtTime(this.gates.arpeggio ? p.mix.arpGain : 0.0001, at, 0.6)
+    this.drumBus.gain.setTargetAtTime(this.gates.drums ? p.mix.drumGain : 0.0001, at, 0.6)
   }
 
   /* ------------------------------- voices -------------------------------- */
@@ -334,24 +371,25 @@ export class MusicEngine {
   }
 
   private schedulePad(at: number, dur: number, chord: number[]): void {
+    const p = this.profile
     this.padUntil = at + dur
     for (const degree of chord) {
       for (const octave of [0, 7]) {
-        const freq = freqForDegree(degree + octave)
+        const freq = freqForDegree(degree + octave, p)
         const level = octave === 0 ? PAD_BODY_LEVEL : PAD_AIR_LEVEL
-        for (const detune of [-PAD_DETUNE_CENTS, PAD_DETUNE_CENTS]) {
+        for (const detune of [-p.padDetuneCents, p.padDetuneCents]) {
           const osc = this.ctx.createOscillator()
           const g = this.ctx.createGain()
-          osc.type = 'sine'
+          osc.type = p.oscillators.pad
           osc.frequency.value = freq
           osc.detune.value = detune
           g.gain.setValueAtTime(0.0001, at)
-          g.gain.linearRampToValueAtTime(level, at + PAD_ATTACK_S)
-          g.gain.setTargetAtTime(0.0001, at + dur, PAD_RELEASE_S / 3)
+          g.gain.linearRampToValueAtTime(level, at + p.padAttackS)
+          g.gain.setTargetAtTime(0.0001, at + dur, p.padReleaseS / 3)
           osc.connect(g)
           g.connect(this.padBus)
           osc.start(at)
-          osc.stop(at + dur + PAD_RELEASE_S * 1.5)
+          osc.stop(at + dur + p.padReleaseS * 1.5)
           this.trackVoice(osc, g)
         }
       }
@@ -359,10 +397,11 @@ export class MusicEngine {
   }
 
   private scheduleBass(at: number, dur: number, degree: number): void {
+    const p = this.profile
     const osc = this.ctx.createOscillator()
     const g = this.ctx.createGain()
-    osc.type = 'triangle'
-    osc.frequency.value = freqForDegree(degree)
+    osc.type = p.oscillators.bass
+    osc.frequency.value = freqForDegree(degree, p)
     g.gain.setValueAtTime(0.0001, at)
     g.gain.exponentialRampToValueAtTime(BASS_LEVEL, at + 0.03)
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
@@ -374,10 +413,11 @@ export class MusicEngine {
   }
 
   private scheduleArp(at: number, dur: number, degree: number, velocity: number): void {
+    const p = this.profile
     const osc = this.ctx.createOscillator()
     const g = this.ctx.createGain()
-    osc.type = 'triangle'
-    osc.frequency.value = freqForDegree(degree + 7)
+    osc.type = p.oscillators.arpeggio
+    osc.frequency.value = freqForDegree(degree + 7, p)
     g.gain.setValueAtTime(0.0001, at)
     g.gain.exponentialRampToValueAtTime(Math.max(0.02, velocity * ARP_LEVEL), at + 0.012)
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
@@ -389,9 +429,10 @@ export class MusicEngine {
   }
 
   private scheduleKick(at: number): void {
+    const p = this.profile
     const osc = this.ctx.createOscillator()
     const g = this.ctx.createGain()
-    osc.type = 'sine'
+    osc.type = p.oscillators.kick
     osc.frequency.setValueAtTime(KICK_START_HZ, at)
     osc.frequency.exponentialRampToValueAtTime(KICK_END_HZ, at + 0.12)
     g.gain.setValueAtTime(KICK_LEVEL, at)

@@ -21,12 +21,20 @@ export default defineConfig({
         // exercised by the manual smoke test, so only the pure audio modules
         // (patterns, tracker, preferences) count towards the audio floor.
         // `musicRng` is a re-export too: the implementation lives in `utils/rng`.
+        // `genreCrossfader` only drives WebAudio master-gain ramps via callbacks
+        // injected by `MusicDirector` (excluded above): without an AudioContext
+        // there is nothing to fade, so a state-machine unit test would be a
+        // mock-of-mock; its contract is covered through the public director API
+        // in the manual smoke test. `genrePreferences` is pure localStorage with
+        // the same shape as `preferences.ts` and is exercised there.
         'src/audio/index.ts',
         'src/audio/musicRng.ts',
         'src/audio/musicEngine.ts',
         'src/audio/musicDirector.ts',
         'src/audio/sound.ts',
         'src/audio/audioDirector.ts',
+        'src/audio/genreCrossfader.ts',
+        'src/audio/genrePreferences.ts',
       ],
       /**
        * Floors measured against the current suite, per layer. There is no global

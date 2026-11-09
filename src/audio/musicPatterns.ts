@@ -7,35 +7,20 @@
 import {
   BARS_PER_CHORD,
   BEATS_PER_BAR,
-  BPM_MAX,
   BPM_MIN,
-  CHORD_PROGRESSIONS,
-  CHORD_ROOT_DEGREES,
-  CUTOFF_MAX_HZ,
-  CUTOFF_MIN_HZ,
-  GROOVE_BASS_STEPS,
-  GROOVE_HAT_STEPS,
-  GROOVE_KICK_STEPS,
-  GROOVE_SWING,
   HIGH_DENSITY,
   MASK_DENSITY_MAX,
   MASK_DENSITY_MIN,
   MAX_REPEAT,
-  MELODY_DEGREES,
   MIN_DEGREES,
   MOTION_TARGET,
   MOTION_WEIGHT,
   REPEAT_WEIGHT,
-  ROOT_FREQ,
-  SCALE_INTERVALS,
   SONG_BARS,
   STEPS_PER_BAR,
-  SWING_S,
-  THRESHOLD_ARPEGIO,
-  THRESHOLD_BASS,
-  THRESHOLD_DRUMS,
   VARIETY_WEIGHT,
 } from './musicConstants'
+import { DEFAULT_GENRE, type GenreProfile, GENRE_PROFILES } from './genre'
 import { mulberry32, rngForBar } from './musicRng'
 
 /** Clamps a value to the 0..1 range. */
@@ -43,13 +28,22 @@ export function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v
 }
 
+/** Resolves an optional profile to a concrete one, failing loudly if missing. */
+export function resolveProfile(profile?: GenreProfile): GenreProfile {
+  const p = profile ?? GENRE_PROFILES.get(DEFAULT_GENRE)
+  if (!p) throw new Error(`Genre profile not found (expected ${DEFAULT_GENRE})`)
+  return p
+}
+
 /** Frequency (Hz) of a scale degree; >= 7 climbs octaves. */
-export function freqForDegree(degree: number): number {
-  const count = SCALE_INTERVALS.length
+export function freqForDegree(degree: number, profile?: GenreProfile): number {
+  const p = resolveProfile(profile)
+  const intervals = p.scaleIntervals
+  const count = intervals.length
   const idx = ((degree % count) + count) % count
   const octaves = Math.floor(degree / count)
-  const interval = SCALE_INTERVALS[idx] ?? 0
-  return ROOT_FREQ * Math.pow(2, (interval + 12 * octaves) / 12)
+  const interval = intervals[idx] ?? 0
+  return p.rootFreq * Math.pow(2, (interval + 12 * octaves) / 12)
 }
 
 /** Candidate step: it only sounds if `threshold` < the layer's current density. */
@@ -90,12 +84,14 @@ export interface SongProfile {
 }
 
 /** Derives the song profile from a seed deterministically. */
-export function songProfile(seed: number): SongProfile {
+export function songProfile(seed: number, profile?: GenreProfile): SongProfile {
+  const p = resolveProfile(profile)
   const rng = mulberry32(seed >>> 0)
   const sum = rng() + rng() + rng()
-  // 3 progressions × 6 grooves × 4 rotations = 72 possible combinations.
-  const combo = Math.floor(rng() * 72)
-  const progression = Math.floor(combo / 24)
+  const progressionCount = p.chordProgressions.length
+  // N progressions × 6 grooves × 4 rotations.
+  const combo = Math.floor(rng() * (progressionCount * 24))
+  const progression = Math.floor(combo / 24) % progressionCount
   const groove = Math.floor((combo % 24) / 4)
   const rotation = combo % 4
   // Triangular distribution on [0,1]: avoids cold or excessive extremes.
@@ -109,22 +105,24 @@ export function songProfile(seed: number): SongProfile {
  * so the song can open at a different point of the cycle. Triads are always
  * diatonic, so any seed sounds consonant.
  */
-export function chordForBar(seed: number, bar: number): number[] {
-  const profile = songProfile(seed)
-  const progression = CHORD_PROGRESSIONS[profile.progression] ?? CHORD_ROOT_DEGREES
-  const chordIndex = (Math.floor(bar / BARS_PER_CHORD) + profile.rotation) % progression.length
+export function chordForBar(seed: number, bar: number, profile?: GenreProfile): number[] {
+  const song = songProfile(seed, profile)
+  const p = resolveProfile(profile)
+  const progression = p.chordProgressions[song.progression] ?? p.chordRootDegrees
+  const chordIndex = (Math.floor(bar / BARS_PER_CHORD) + song.rotation) % progression.length
   const root = progression[chordIndex] ?? 0
   return [root, root + 2, root + 4]
 }
 
-/** Snaps a scale degree to the nearest pentatonic degree of the same octave. */
-function snapToPentatonic(degree: number): number {
-  const count = SCALE_INTERVALS.length
+/** Snaps a scale degree to the nearest melody degree of the same octave. */
+function snapToPentatonic(degree: number, profile?: GenreProfile): number {
+  const p = resolveProfile(profile)
+  const count = p.scaleIntervals.length
   const base = Math.floor(degree / count) * count
   const idx = ((degree % count) + count) % count
-  let best: number = MELODY_DEGREES[0] ?? 0
+  let best: number = p.melodyDegrees[0] ?? 0
   let bestDist = Number.POSITIVE_INFINITY
-  for (const m of MELODY_DEGREES) {
+  for (const m of p.melodyDegrees) {
     const d = Math.abs(m - idx)
     if (d < bestDist) {
       bestDist = d
@@ -138,15 +136,16 @@ function snapToPentatonic(degree: number): number {
  * Complete material of one bar: always identical for the same (seed, bar).
  * Density/intensity only decides which steps actually sound.
  */
-export function barPattern(seed: number, bar: number): BarPattern {
-  const profile = songProfile(seed)
+export function barPattern(seed: number, bar: number, profile?: GenreProfile): BarPattern {
+  const p = resolveProfile(profile)
+  const song = songProfile(seed, p)
   const rng = rngForBar(seed, bar)
-  const chord = chordForBar(seed, bar)
-  const kickSteps = GROOVE_KICK_STEPS[profile.groove] ?? [0, 8]
-  const hatSteps = GROOVE_HAT_STEPS[profile.groove] ?? [2, 6, 10, 14]
-  const bassSteps = GROOVE_BASS_STEPS[profile.groove] ?? [0]
-  const swingEnabled = GROOVE_SWING[profile.groove] ?? false
-  const swing = swingEnabled ? SWING_S : 0
+  const chord = chordForBar(seed, bar, p)
+  const kickSteps = p.groove.kickSteps[song.groove] ?? [0, 8]
+  const hatSteps = p.groove.hatSteps[song.groove] ?? [2, 6, 10, 14]
+  const bassSteps = p.groove.bassSteps[song.groove] ?? [0]
+  const swingEnabled = p.groove.swing[song.groove] ?? false
+  const swing = swingEnabled ? p.groove.swingS : 0
   const maskThresholds = [0.5, 0.7, 0.9]
   const masked = (steps: readonly number[]): MaskedStep[] =>
     steps.map((s, i) => ({
@@ -161,11 +160,11 @@ export function barPattern(seed: number, bar: number): BarPattern {
   let octave = 0
   for (let step = 0; step < STEPS_PER_BAR; step++) {
     // Diatonic walk around the chord: the seed decides direction and leaps.
-    const walk = profile.arpWalk - 0.5
+    const walk = song.arpWalk - 0.5
     const jump = walk === 0 ? 1 : (walk > 0 ? 1 : 2) + (rng() < Math.abs(walk) ? 1 : 0)
     toneIndex =
       (((toneIndex + (walk >= 0 ? jump : -jump)) % chord.length) + chord.length) % chord.length
-    if (rng() < profile.octaveLift * 0.4) octave = octave === 0 ? 7 : 0
+    if (rng() < song.octaveLift * 0.4) octave = octave === 0 ? 7 : 0
     const tone = chord[toneIndex] ?? 0
     // On-beat steps are cheap candidates; off-beat ones are occasional.
     const onBeat = step % 2 === 0
@@ -173,7 +172,7 @@ export function barPattern(seed: number, bar: number): BarPattern {
     arpeggio.push({
       step,
       threshold,
-      degree: snapToPentatonic(tone + octave),
+      degree: snapToPentatonic(tone + octave, p),
       velocity: 0.55 + rng() * 0.45,
     })
   }
@@ -185,7 +184,8 @@ export function barPattern(seed: number, bar: number): BarPattern {
  * seeds. It rewards melodic variety, dynamic range and bass movement, and
  * penalizes repetitive or frozen melodies.
  */
-export function songScore(seed: number, bars = SONG_BARS): number {
+export function songScore(seed: number, bars = SONG_BARS, profile?: GenreProfile): number {
+  const p = resolveProfile(profile)
   const degrees = new Set<number>()
   let stepCount = 0
   let repeatStreak = 0
@@ -193,10 +193,10 @@ export function songScore(seed: number, bars = SONG_BARS): number {
   let prev = -1
   let bassMotion = 0
   for (let bar = 0; bar < bars; bar++) {
-    const pattern = barPattern(seed, bar)
+    const pattern = barPattern(seed, bar, p)
     for (const step of pattern.arpeggio) {
       if (step.threshold >= HIGH_DENSITY) continue
-      degrees.add(step.degree % SCALE_INTERVALS.length)
+      degrees.add(step.degree % p.scaleIntervals.length)
       stepCount += 1
       if (step.degree === prev) {
         repeatStreak += 1
@@ -229,29 +229,33 @@ export interface LayerGates {
   drums: boolean
 }
 
-export function layersForIntensity(intensity: number): LayerGates {
+export function layersForIntensity(intensity: number, profile?: GenreProfile): LayerGates {
+  const p = resolveProfile(profile)
   const v = clamp01(intensity)
   return {
-    bass: v >= THRESHOLD_BASS,
-    arpeggio: v >= THRESHOLD_ARPEGIO,
-    drums: v >= THRESHOLD_DRUMS,
+    bass: v >= p.thresholdBass,
+    arpeggio: v >= p.thresholdArpeggio,
+    drums: v >= p.thresholdDrums,
   }
 }
 
-/** Linear tempo 84→120 BPM with intensity. */
-export function tempoFor(intensity: number): number {
-  return BPM_MIN + (BPM_MAX - BPM_MIN) * clamp01(intensity)
+/** Linear tempo bpmMin→bpmMax BPM with intensity. */
+export function tempoFor(intensity: number, profile?: GenreProfile): number {
+  const p = resolveProfile(profile)
+  return p.bpmMin + (p.bpmMax - p.bpmMin) * clamp01(intensity)
 }
 
 /** Global filter cutoff (brightness) by intensity. */
-export function cutoffFor(intensity: number): number {
-  return CUTOFF_MIN_HZ + (CUTOFF_MAX_HZ - CUTOFF_MIN_HZ) * clamp01(intensity)
+export function cutoffFor(intensity: number, profile?: GenreProfile): number {
+  const p = resolveProfile(profile)
+  return p.cutoffMinHz + (p.cutoffMaxHz - p.cutoffMinHz) * clamp01(intensity)
 }
 
 /** Note-mask density (0.25 → 1) from the arpeggio threshold. */
-export function maskDensityFor(intensity: number): number {
-  const span = 1 - THRESHOLD_ARPEGIO
-  const t = span > 0 ? clamp01((clamp01(intensity) - THRESHOLD_ARPEGIO) / span) : 1
+export function maskDensityFor(intensity: number, profile?: GenreProfile): number {
+  const p = resolveProfile(profile)
+  const span = 1 - p.thresholdArpeggio
+  const t = span > 0 ? clamp01((clamp01(intensity) - p.thresholdArpeggio) / span) : 1
   return MASK_DENSITY_MIN + (MASK_DENSITY_MAX - MASK_DENSITY_MIN) * t
 }
 
