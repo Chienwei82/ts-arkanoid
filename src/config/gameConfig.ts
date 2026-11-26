@@ -126,6 +126,87 @@ export const RENDER = {
   background: { cloudCount: 7, floaterCount: 5, boxCount: 8, bobAmplitude: 0.9 },
   card: { size: 4.4, bob: 0.55, spin: 1.3, glowScale: 1.9, glowAlpha: 0.55, pulse: 0.06 },
   levelIntro: { duration: 0.9, scaleFrom: 0.86, tilt: 0.05 },
+  /** Arcade card ("NIVEL 2 · FORTÍN") floating over the field at level entry. */
+  titleCard: {
+    life: 2.2,
+    /** Fade in/out time at both ends of the card's life. */
+    fadeTime: 0.45,
+    /** Extra scale breathed over the card right after it appears. */
+    pop: 0.14,
+    popSpeed: 7.5,
+    /** Card quad width in world units (height follows the canvas ratio). */
+    width: 26,
+    y: 9.5,
+    z: 4.8,
+    opacity: 0.95,
+  },
+  /**
+   * Hyperspace jump between sectors: it streaks out when a level completes,
+   * cruises while the continue screen shows and decelerates while the next
+   * level settles in.
+   */
+  warp: {
+    departDuration: 0.85,
+    arriveDuration: 1.15,
+    /** Length of the white flash spike that opens each jump phase. */
+    flashDuration: 0.3,
+    peak: { warp: 1, streaks: 1, aberration: 1, flash: 0.8 },
+    cruise: { warp: 0.55, streaks: 0.75, aberration: 0.35 },
+    /** Reduced-motion multipliers for the two surviving channels. */
+    reduced: { aberration: 0.2, flash: 0.45 },
+    departGalaxyFlash: 1.5,
+    arriveGalaxyFlash: 0.8,
+    departTrauma: 0.3,
+    arriveTrauma: 0.35,
+  },
+  /**
+   * Per-level chromatic identity: the menu keeps the classic cyan look and
+   * every campaign level re-dresses board, lights and sky with its own accent
+   * family. Custom levels fall back to a hue derived from their name.
+   */
+  levelThemes: {
+    menu: {
+      accent: '#ff3df0',
+      aux: '#7df9ff',
+      keyLight: '#9df3ff',
+      fillLight: '#ff3df0',
+      galaxyTint: '#ffffff',
+    },
+    levels: [
+      // IGNICIÓN — launch bay lit by molten magma.
+      {
+        accent: '#ff9f2e',
+        aux: '#ffc46b',
+        keyLight: '#ffb36b',
+        fillLight: '#ff506e',
+        galaxyTint: '#ffc9a3',
+      },
+      // FORTÍN — frozen steel over a cyan sea.
+      {
+        accent: '#49e6ff',
+        aux: '#9df3ff',
+        keyLight: '#9df3ff',
+        fillLight: '#3d5bff',
+        galaxyTint: '#c8ecff',
+      },
+      // LABERINTO — toxic greenhouse between emeralds and violet fog.
+      {
+        accent: '#4dffa6',
+        aux: '#b06bff',
+        keyLight: '#c9a6ff',
+        fillLight: '#4dffa6',
+        galaxyTint: '#d5c4ff',
+      },
+      // NÚCLEO — the reactor heart, crimson against magenta.
+      {
+        accent: '#ff3df0',
+        aux: '#ff506e',
+        keyLight: '#ff8ca8',
+        fillLight: '#ff2e4d',
+        galaxyTint: '#ffb3cc',
+      },
+    ],
+  },
   guide: { width: 0.7, alpha: 0.5 },
   /**
    * Paddle "dress-up" for the running power-up: an additive aura behind the bar,

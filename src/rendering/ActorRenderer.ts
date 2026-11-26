@@ -243,6 +243,11 @@ export class ActorRenderer {
     this.motionScale = scale
   }
 
+  /** Retints the travelling ball light with the level accent. */
+  setBallLightColour(hex: number): void {
+    this.ballLight.color.setHex(hex)
+  }
+
   /** Drops transient actors without touching the pools (level change). */
   clear(): void {
     for (let slot = 0; slot < this.slotIds.length; slot += 1) this.releaseSlot(slot)

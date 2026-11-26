@@ -151,7 +151,9 @@ src/
   rendering/   escena papercraft: SceneBuilder, BrickRenderer, ActorRenderer,
                ConfettiSystem, BallTrail, ExplosionWaves, ScreenShake, PostFX,
                GalaxyBackdrop (fondo galáctico procedural), FloatingScoreSystem
-               (números flotantes), texturas generadas por canvas y
+               (números flotantes), LevelTitleCard (tarjeta de nivel),
+               levelTheme + warp (puros: identidad por nivel y salto
+               hiperespacial), texturas generadas por canvas y
                CraftGameRenderer (implementa GameRenderer)
   bridge/      GameFacade + GameSession (store externo que consume React)
   ui/          componentes React (HUD, paneles, controles táctiles) y su CSS
@@ -249,12 +251,14 @@ niveles (`IGNICIÓN`, `FORTÍN`, `LABERINTO`, `NÚCLEO`).
   combinación de puntos/color; aparecen sobre los ladrillos destruidos y suben mientras
   hacen fade-in/out con blending aditivo.
 - Iluminación dinámica: `PointLight` que sigue a la bola y deja un charco de luz sobre los
-  ladrillos; ambiente hemisférico + direccional para el look de papel mate.
+  ladrillos; ambiente hemisférico + direccional para el look de papel mate. Su color (y el de
+  la estela) sigue el acento del nivel actual.
 - Screen shake por _trauma_ (amplitud = trauma²) aplicado a la cámara con ruido de senos: sin
   asignaciones ni RNG en el bucle. Al impactar la bola contra el paddle se combina con un
   efecto de **squash/stretch** (el paddle se aplasta en Y y se estira en X brevemente).
-- Post-proceso: `RenderPass` → `UnrealBloomPass` (umbral alto, sólo altas luces) → viñeta +
-  grano de papel → `OutputPass` (tone mapping ACES y conversión de color).
+- Post-proceso: `RenderPass` → `UnrealBloomPass` (umbral alto, sólo altas luces) → **salto al
+  hiperespacio** cuando está activo → viñeta + grano de papel → `OutputPass` (tone mapping ACES
+  y conversión de color).
 - Canvas responsivo: `ViewportManager` (`platform/`) mide el host con `ResizeObserver` y
   escucha `resize`/`orientationchange`/`visualViewport`; el `devicePixelRatio` queda limitado
   (`QUALITY.high.maxPixelRatio = 2`, `1.5` en el preset móvil) y la cámara se reencuadra para
@@ -270,7 +274,19 @@ niveles (`IGNICIÓN`, `FORTÍN`, `LABERINTO`, `NÚCLEO`).
 - Barra de progreso: el HUD muestra un medidor de `clearance` (fracción de ladrillos
   destructores destruidos) que se llena a medida que se avanza en el nivel.
 - Transiciones: al cambiar de nivel o empezar partida el tablero entra con escala/tilt y la
-  cámara retrocede brevemente; al superar un nivel cae confeti desde arriba.
+  cámara retrocede brevemente, mientras la tarjeta **«NIVEL n · NOMBRE»** (`LevelTitleCard`,
+  sprite con textura canvas cacheada) flota sobre el campo con pop y fade.
+- **Salto al hiperespacio** entre niveles: `WarpDirector` (puro, testeable) produce la
+  envolvente del salto y un pase de postefecto propio pinta el smear radial multipasada (las
+  estrellas se estiran en rayos), aberración cromática y un flash blanco de despegue. La
+  salida se dispara al completar un nivel, **crucero** mientras se muestra la pantalla
+  CONTINUAR y **desaceleración** al llegar al siguiente. Fuera del salto el pase queda
+  deshabilitado (coste cero), y con `prefers-reduced-motion` sólo sobrevive un fade suave.
+- **Identidad cromática por nivel**: cada nivel re-vestible el diorama completo — raíles, lámina
+  holográfica, conductos, planeta, luces clave/relleno, tinte multiplicativo de la galaxia,
+  estela y luz de la bola — desde `RENDER.levelThemes` (`rendering/levelTheme.ts` resuelve el
+  tema y deriva uno determinista por nombre para niveles personalizados). El menú conserva el
+  cian clásico.
 - Sin números mágicos: todo el ajuste vive en `src/config/gameConfig.ts` y `palette.ts`.
 
 ## React y desmontaje
@@ -320,7 +336,7 @@ pura (testable en Node) y unos adaptadores que sólo tocan el DOM cuando suenan.
 ## Pruebas y cobertura
 
 ```bash
-npm test              # 273 pruebas en 28 archivos
+npm test              # 344 pruebas en 36 archivos
 npm run test:coverage # informe de cobertura + umbrales por capa
 ```
 

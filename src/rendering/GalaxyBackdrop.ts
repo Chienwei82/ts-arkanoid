@@ -156,6 +156,9 @@ export class GalaxyBackdrop {
   private flashLevel = 0
   private elapsed = 0
   private disposed = false
+  /** Base colour of every material, snapshotted at build for theme tinting. */
+  private readonly baseColours: Color[] = []
+  private readonly tintColour = new Color()
   /** Cuánto se desplaza la galaxia respecto al escenario (0 = fija, 1 = igual). */
   private readonly parallaxFactor = 0.15
   private parallaxX = 0
@@ -190,6 +193,11 @@ export class GalaxyBackdrop {
     this.buildArmStars(layout)
     this.buildFieldStars(layout)
     this.buildMeteors(layout)
+    // Snapshot every base colour: themes can then tint and revert the whole
+    // sky at will, without rebuilding any geometry.
+    for (const material of this.materials) {
+      this.baseColours.push(new Color((material as MeshBasicMaterial).color))
+    }
   }
 
   /**
@@ -237,6 +245,20 @@ export class GalaxyBackdrop {
   /** Current flash energy, exposed so tests can assert the ripple. */
   get flashEnergy(): number {
     return this.flashLevel
+  }
+
+  /**
+   * Retints the whole sky from the stored base colours: a theme hands its
+   * accent tint over and '#ffffff' restores the pristine sky. Repeatable and
+   * cheap, so it can run on every level change.
+   */
+  setTint(hex: number): void {
+    if (this.disposed) return
+    this.tintColour.setHex(hex)
+    for (let index = 0; index < this.materials.length; index += 1) {
+      const material = this.materials[index] as MeshBasicMaterial
+      material.color.copy(this.baseColours[index]).multiply(this.tintColour)
+    }
   }
 
   /** Releases every geometry, material and texture the backdrop owns. */

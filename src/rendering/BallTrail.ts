@@ -87,6 +87,12 @@ export class BallTrail {
     this.drain = 0
   }
 
+  /** Retints the ribbon with the level accent; live samples re-colour at once. */
+  setColour(hex: number): void {
+    this.baseColour.setHex(hex)
+    this.write()
+  }
+
   /** Called when no ball is flying: the ribbon drains from its oldest sample. */
   update(dt: number, following: boolean): void {
     if (this.count === 0) return

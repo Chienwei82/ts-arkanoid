@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { AdditiveBlending, InstancedMesh, Mesh, Texture } from 'three'
+import type { MeshBasicMaterial } from 'three'
 import { RENDER } from '../src/config/gameConfig'
+import { hexToInt } from '../src/utils/math'
 import { GalaxyBackdrop } from '../src/rendering/GalaxyBackdrop'
 import {
   buildGalaxyLayout,
@@ -259,5 +261,25 @@ describe('galaxy backdrop', () => {
 
     // Disposing twice is safe.
     expect(() => backdrop.dispose()).not.toThrow()
+  })
+})
+
+describe('galaxy theme tint', () => {
+  it('retints the sky materials from their base colours and reverts with white', () => {
+    const backdrop = new GalaxyBackdrop(createTextures())
+    const mesh = backdrop.object.children.find((child): child is Mesh => child instanceof Mesh)
+    const material = (mesh?.material ?? null) as MeshBasicMaterial | null
+    expect(material).not.toBeNull()
+    if (material === null) throw new Error('the backdrop must build at least one mesh')
+    const base = material.color.getHex()
+
+    backdrop.setTint(hexToInt('#6699ff'))
+    expect(material.color.getHex()).not.toBe(base)
+
+    // White is the identity tint: the pristine sky comes back exactly.
+    backdrop.setTint(0xffffff)
+    expect(material.color.getHex()).toBe(base)
+
+    backdrop.dispose()
   })
 })
