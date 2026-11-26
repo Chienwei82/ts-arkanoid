@@ -83,6 +83,18 @@ interface Tumbler {
 }
 
 /**
+ * Integer-colour dressing the renderer hands over whenever the level theme
+ * changes; derived from the pure `LevelTheme` (rendering/levelTheme.ts).
+ */
+export interface SceneTheme {
+  readonly accent: number
+  readonly aux: number
+  readonly keyLight: number
+  readonly fillLight: number
+  readonly galaxyTint: number
+}
+
+/**
  * Scene composition: deep space above a neon play board - a layered twinkling
  * starfield, a ringed planet on the horizon, side energy pylons, a grid deck
  * and tumbling hull debris. Every prop is instanced and animated in place, so
@@ -107,6 +119,12 @@ export class SceneBuilder {
   private planetBaseY = 0
   private conduitGlow: MeshBasicMaterial | null = null
   private conduitBaseOpacity = 0.5
+  /** Neon strips and lights re-dressed by the running level theme. */
+  private glassMaterial: MeshBasicMaterial | null = null
+  private railMaterial: MeshBasicMaterial | null = null
+  private planetRingMaterial: MeshBasicMaterial | null = null
+  private keyLight: DirectionalLight | null = null
+  private fillLight: DirectionalLight | null = null
   private readonly clouds: InstancedMesh
   private readonly windows: InstancedMesh
   private readonly blocks: InstancedMesh
@@ -179,6 +197,22 @@ export class SceneBuilder {
     this.galaxy.flash(strength)
   }
 
+  /**
+   * Re-dresses the diorama with the running level's identity: neon rails,
+   * holographic glass and conduits pick the accent, both lights and the
+   * planet follow, and the galaxy is retinted from its base colours.
+   */
+  applyTheme(theme: SceneTheme): void {
+    this.glassMaterial?.color.setHex(theme.aux)
+    this.railMaterial?.color.setHex(theme.accent)
+    this.conduitGlow?.color.setHex(theme.accent)
+    this.planetGlow?.color.setHex(theme.aux)
+    this.planetRingMaterial?.color.setHex(theme.accent)
+    this.keyLight?.color.setHex(theme.keyLight)
+    this.fillLight?.color.setHex(theme.fillLight)
+    this.galaxy.setTint(theme.galaxyTint)
+  }
+
   update(dt: number): void {
     this.lastDt = dt
     this.elapsed += dt
@@ -208,6 +242,8 @@ export class SceneBuilder {
     // Magenta rim from the opposite side keeps dark hulls edged in neon.
     const fill = new DirectionalLight(0xff3df0, 0.4)
     fill.position.set(-20, -12, 24)
+    this.keyLight = key
+    this.fillLight = fill
     this.scene.add(hemisphere, ambient, key, fill)
   }
 
@@ -228,6 +264,7 @@ export class SceneBuilder {
     const ringMaterial = createNeonMaterial(RING_COLOUR, 0.55)
     this.geometries.push(ringGeometry)
     this.materials.push(ringMaterial)
+    this.planetRingMaterial = ringMaterial
     const ring = new Mesh(ringGeometry, ringMaterial)
     ring.position.copy(planet.position)
     ring.rotation.set(1.2, 0.2, 0)
@@ -468,6 +505,7 @@ export class SceneBuilder {
     )
     this.geometries.push(glassGeometry)
     this.materials.push(glassMaterial)
+    this.glassMaterial = glassMaterial
     const glass = new Mesh(glassGeometry, glassMaterial)
     glass.position.z = RENDER.depth.panel + FIELD_THICKNESS / 2 + GLASS_OFFSET
     this.board.add(glass)
@@ -477,6 +515,7 @@ export class SceneBuilder {
     // Cyan rails top and bottom frame the board like a launch bay.
     const railMaterial = createNeonMaterial(hexToInt(PALETTE.wallAccent), RAIL_OPACITY)
     this.materials.push(inkMaterial, wallMaterial, railMaterial)
+    this.railMaterial = railMaterial
     const wallDepth = BRICK.depth * 1.25
     const walls: readonly (readonly [number, number, number, number])[] = [
       [-(FIELD.halfWidth + frame / 2), 0, frame, fieldHeight + frame * 2],

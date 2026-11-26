@@ -1,5 +1,6 @@
 import {
   ACESFilmicToneMapping,
+  Color,
   PerspectiveCamera,
   Plane,
   Raycaster,
@@ -30,6 +31,9 @@ import { ScreenShake } from './ScreenShake'
 import { SparkSystem } from './SparkSystem'
 import { primaryPowerUp } from './cues'
 import { CraftTextures } from './textures'
+import { LevelTitleCard } from './LevelTitleCard'
+import { levelTitleText, menuTheme, resolveLevelTheme, type LevelTheme } from './levelTheme'
+import { WarpDirector } from './warp'
 
 const CONFETTI = { brick: 22, chain: 11, damaged: 5, pickup: 12, celebration: 40 }
 const SPARKS = { brick: 10, damaged: 4, pickup: 14, laser: 5 }
@@ -95,6 +99,11 @@ export class CraftGameRenderer implements GameRenderer {
   private readonly viewport: ViewportManager
   private readonly unsubscribers: Unsubscribe[]
   private readonly motionQuery: MediaQueryList | null
+  private readonly title = new LevelTitleCard()
+  private readonly warpDirector = new WarpDirector()
+  private readonly accent = new Color()
+  private pendingLevel: { theme: LevelTheme; label: string; colour: number } | null = null
+  private warpActive = false
 
   private bricksRef: readonly Brick[] = []
   private world: World | null = null
@@ -144,8 +153,11 @@ export class CraftGameRenderer implements GameRenderer {
       this.sparks.object,
     )
     this.sceneBuilder.board.add(this.scores.object)
+    this.scene.add(this.title.object)
 
     this.postFX = new PostFX(this.renderer, this.scene, this.camera, quality.bloom)
+    // The diorama boots dressed from the single theme source (menu identity).
+    this.applyTheme(menuTheme())
     this.unsubscribers = this.wireEvents()
 
     this.canvas.addEventListener('webglcontextlost', this.handleContextLost)
@@ -190,6 +202,8 @@ export class CraftGameRenderer implements GameRenderer {
     this.trail.update(dt, this.trailActive)
     this.sparks.update(dt)
     this.scores.update(dt)
+    this.title.update(dt)
+    this.updateWarp(dt)
     this.updateIntro(dt)
     this.updateCelebration(dt)
   }
@@ -234,6 +248,7 @@ export class CraftGameRenderer implements GameRenderer {
     this.waves.dispose()
     this.confetti.dispose()
     this.scores.dispose()
+    this.title.dispose()
     this.actors.dispose()
     this.bricks.dispose()
     this.sceneBuilder.dispose()
@@ -312,8 +327,16 @@ export class CraftGameRenderer implements GameRenderer {
         // La viñeta se cierra un poco al perder vida para subir la tensión.
         this.postFX.setVignette(Math.min(1, RENDER.vignette + 0.15))
       }),
-      this.bus.on('levelChanged', () => {
+      this.bus.on('levelChanged', ({ index, name }) => {
         this.startIntro()
+        // The theme is applied when the next `playing` lands (see commitLevel),
+        // so resuming a pause or browsing the menu can never re-dress the run.
+        const theme = resolveLevelTheme(index, name)
+        this.pendingLevel = {
+          theme,
+          label: levelTitleText(index, name),
+          colour: hexToInt(theme.accent),
+        }
       }),
       this.bus.on('statusChanged', ({ to }) => {
         this.onStatusChanged(to)
@@ -328,18 +351,25 @@ export class CraftGameRenderer implements GameRenderer {
         this.startIntro()
         this.postFX.setBloom(RENDER.bloom.strength)
         this.postFX.setVignette(RENDER.vignette)
+        // Commit the identity only when a level actually loaded: a resume
+        // from pause re-enters `playing` without a fresh levelChanged.
+        this.commitLevel()
         break
       case 'levelComplete':
         this.celebrationLeft = CELEBRATION_BURSTS
         this.celebrationTimer = 0
         // Más bloom durante la celebración para realzar el espectáculo visual.
         this.postFX.setBloom(RENDER.bloom.strength * 1.6)
+        this.departSector()
         break
       case 'gameOver':
         this.addTrauma(TRAUMA.gameOver)
+        this.warpDirector.reset()
+        this.disableWarp()
         break
       case 'menu':
         this.actors.setCueType(null)
+        this.exitToMenu()
         break
       case 'paused':
         break
@@ -364,7 +394,73 @@ export class CraftGameRenderer implements GameRenderer {
     this.shakeScale = reduced ? 0 : 1
     this.confettiScale = reduced ? CALM_CONFETTI_RATIO : 1
     this.actors.setMotionScale(this.shakeScale)
+    // The jump keeps a calm fade instead of streaks and the card stays flat.
+    this.warpDirector.setReducedMotion(reduced)
+    this.title.setMotionScale(reduced ? 0 : 1)
     if (reduced) this.shake.reset()
+  }
+
+  /** Applies the pending level identity: dressing, title card and arrival. */
+  private commitLevel(): void {
+    const pending = this.pendingLevel
+    if (pending === null) return
+    this.pendingLevel = null
+    this.applyTheme(pending.theme)
+    this.title.show(pending.label, pending.colour)
+    this.warpDirector.arrive()
+    if (this.warpDirector.active) {
+      this.sceneBuilder.flashGalaxy(RENDER.warp.arriveGalaxyFlash)
+      this.addTrauma(RENDER.warp.arriveTrauma)
+    }
+  }
+
+  /** The sector is left behind: streak out while the galaxy flares. */
+  private departSector(): void {
+    this.warpDirector.depart()
+    this.sceneBuilder.flashGalaxy(RENDER.warp.departGalaxyFlash)
+    this.addTrauma(RENDER.warp.departTrauma)
+  }
+
+  /** The menu keeps the cyan identity and calms any cruise left over. */
+  private exitToMenu(): void {
+    this.warpDirector.arrive()
+    this.pendingLevel = null
+    this.title.hide()
+    this.applyTheme(menuTheme())
+  }
+
+  /** Re-dresses board, lights, trail, ball light and the hyperspace tint. */
+  private applyTheme(theme: LevelTheme): void {
+    const accent = hexToInt(theme.accent)
+    this.sceneBuilder.applyTheme({
+      accent,
+      aux: hexToInt(theme.aux),
+      keyLight: hexToInt(theme.keyLight),
+      fillLight: hexToInt(theme.fillLight),
+      galaxyTint: hexToInt(theme.galaxyTint),
+    })
+    this.trail.setColour(accent)
+    this.actors.setBallLightColour(accent)
+    this.accent.setHex(accent)
+    this.postFX.setWarpTint(this.accent)
+  }
+
+  /** Advances the jump timeline; the idle pass costs nothing to keep off. */
+  private updateWarp(dt: number): void {
+    const sample = this.warpDirector.update(dt)
+    if (sample === null) {
+      this.disableWarp()
+      return
+    }
+    this.postFX.setWarp(sample)
+    this.warpActive = true
+  }
+
+  /** Hard-stops the hyperspace pass once the timeline is over. */
+  private disableWarp(): void {
+    if (!this.warpActive) return
+    this.postFX.setWarp(null)
+    this.warpActive = false
   }
 
   /**
